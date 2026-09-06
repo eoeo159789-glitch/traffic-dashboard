@@ -240,6 +240,7 @@
       case 'explore': renderExplore(accidents); break;
       case 'enforcement': renderEnforcementTab(accidents); break;
       case 'population': renderPopulationTab(accidents); break;
+      case 'improve': Improve.render(); break;
       case 'table': renderTableTab(accidents); break;
     }
   }
@@ -639,6 +640,7 @@
     renderA2DownloadList();
     MapView.init();
     Hotspot.init();
+    Improve.init();
 
     State.onChange(() => { tablePage = 1; renderCurrentTab(); });
     renderCurrentTab();

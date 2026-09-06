@@ -75,6 +75,7 @@
       <button class="tab-btn" data-tab="explore">多維探索</button>
       <button class="tab-btn" data-tab="enforcement">事故 vs 舉發執法</button>
       <button class="tab-btn" data-tab="population">事故 vs 人口/縣市</button>
+      <button class="tab-btn" data-tab="improve">改善趨勢分析</button>
       <button class="tab-btn" data-tab="table">資料表與匯出</button>
     </div>
 
@@ -346,6 +347,62 @@
       </div>
     </section>
 
+    <!-- ============ 改善趨勢分析 ============ -->
+    <section class="tab-panel" id="tab-improve">
+      <div class="card">
+        <div class="card-head">
+          <h2>全國整體改善總覽</h2>
+        </div>
+        <p class="hint">下方每張卡片各自使用該資料現有的完整年度範圍（起始年→結束年，已標示在卡片標題上）。<strong>改善%</strong> 定義為「(起始年數值－結束年數值) ÷ 起始年數值 × 100%」：<strong>正值（綠色）＝數值減少＝改善，負值（紅色）＝數值增加＝惡化</strong>。此區塊為全國（22縣市）總計，不受下方縣市篩選影響。</p>
+        <div class="kpi-row" id="improveKpiRow"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>各縣市改善排行</h2>
+          <div class="card-tools">
+            指標：<select id="improveRankMetric"></select>
+            起始年：<select id="improveRankStartYear"></select>
+            結束年：<select id="improveRankEndYear"></select>
+            <button class="btn" data-export-chart="improveRankChart">⭳ PNG</button>
+            <button class="btn" id="improveRankExportCsv">⭳ 匯出 CSV</button>
+          </div>
+        </div>
+        <div class="chart-wrap tall" style="height:520px"><canvas id="improveRankChart"></canvas></div>
+        <p class="hint" id="improveRankNote"></p>
+        <p class="hint">排行依「改善%」由高到低排序（最上方＝改善最多）。小型縣市（如離島）因基期件數／人數較少，單一年度波動就可能造成百分比大幅變化，解讀時請留意基期數字，不宜只看百分比排名。若某縣市在指標「每十萬人死亡率」缺少資料（例如死亡人數未滿 20 人，官方以「*」標示為不可靠而未公布），該縣市會從排行中排除。</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h2>舉發件數變化 vs 事故／死傷改善對照</h2>
+          </div>
+          <div class="card-tools" style="margin-bottom:8px">
+            事故指標（Y軸）：<select id="improveEnfMetric"></select>
+            起始年：<select id="improveEnfStartYear"></select>
+            結束年：<select id="improveEnfEndYear"></select>
+            <button class="btn" data-export-chart="improveEnfScatterChart">⭳ PNG</button>
+          </div>
+          <div class="chart-wrap tall"><canvas id="improveEnfScatterChart"></canvas></div>
+          <p class="hint">X 軸為該縣市「舉發總件數」變化%（正值＝增加，負值＝減少，純描述變化方向，不代表好壞）；Y 軸為所選事故指標的改善%（正值＝改善）。每點代表一個縣市。右上：舉發增加且事故改善；左上：舉發減少但事故仍改善（可能反映道路工程、教育宣導等其他因素）；右下：舉發增加但事故未改善；左下：舉發減少且事故未改善。<strong>此圖僅呈現描述性關聯，不代表因果關係</strong>，事故改善或惡化通常是執法強度、道路品質、車流量、人口結構、經濟活動等多重因素共同影響的結果。</p>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>罰鍰收入變化 vs 事故／死傷改善對照</h2>
+          </div>
+          <div class="card-tools" style="margin-bottom:8px">
+            事故指標（Y軸）：<select id="improveFinesMetric"></select>
+            起始年：<select id="improveFinesStartYear"></select>
+            結束年：<select id="improveFinesEndYear"></select>
+            <button class="btn" data-export-chart="improveFinesScatterChart">⭳ PNG</button>
+          </div>
+          <div class="chart-wrap tall"><canvas id="improveFinesScatterChart"></canvas></div>
+          <p class="hint">X 軸為該縣市「道路交通違規罰鍰收入」變化%（正值＝增加，負值＝減少）；Y 軸為所選事故指標的改善%。罰鍰收入資料僅有 111–114 年（西元 2022–2025）共 4 個年度可選。同樣<strong>僅為描述性對照，不代表因果關係</strong>：罰鍰收入變化可能反映執法強度、車流量、違規態樣結構變化等，不宜直接解讀為「罰得越多治安越差」或「罰得越少越安全」。</p>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ 資料表與匯出 ============ -->
     <section class="tab-panel" id="tab-table">
       <div class="card">
@@ -412,6 +469,7 @@
 <script src="js/charts.js"></script>
 <script src="js/map.js"></script>
 <script src="js/hotspot.js"></script>
+<script src="js/improve.js"></script>
 <script src="js/export.js"></script>
 <script src="js/app.js"></script>
 </body>

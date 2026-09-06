@@ -557,8 +557,53 @@ const Charts = (() => {
     });
   }
 
+  // ---------------- 改善趨勢分析 ----------------
+
+  // 各縣市改善排行：rows = [{county, start, end, pct}]，pct 正值=改善(減少)，負值=惡化(增加)
+  function renderImproveRank(canvasId, rows, seriesLabel) {
+    upsert(canvasId, {
+      type: 'bar',
+      data: {
+        labels: rows.map(r => r.county),
+        datasets: [{
+          label: seriesLabel,
+          data: rows.map(r => Number(r.pct.toFixed(1))),
+          backgroundColor: rows.map(r => r.pct >= 0 ? Util.STATUS.good : Util.STATUS.critical),
+          borderRadius: 4,
+        }],
+      },
+      options: baseOptions({
+        indexAxis: 'y',
+        plugins: { legend: { display: true } },
+        scales: {
+          x: { ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          y: { ticks: { color: Util.chartTextColor(), font: { size: 10 } }, grid: { display: false } },
+        },
+      }),
+    });
+  }
+
+  // 舉發／罰鍰變化 vs 事故改善對照散佈圖：points = [{x, y, label}]
+  function renderImproveScatter(canvasId, points, xLabel, yLabel) {
+    upsert(canvasId, {
+      type: 'scatter',
+      data: { datasets: [{ label: `${points.length} 個縣市`, data: points, backgroundColor: Util.seriesColor(4) }] },
+      options: baseOptions({
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.raw.label}：${xLabel} ${Util.fmtNum(ctx.raw.x)}%，${yLabel} ${Util.fmtNum(ctx.raw.y)}%` } },
+        },
+        scales: {
+          x: { title: { display: true, text: xLabel + '（%）', color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          y: { title: { display: true, text: yLabel + '（%）', color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+        },
+      }),
+    });
+  }
+
   return {
     upsert, exportPng, refreshTheme,
+    renderImproveRank, renderImproveScatter,
     renderTrend, renderCountyRank, renderSimpleDonut, renderHourChart,
     renderSingleDim, renderCauseChart, renderCrossTable,
     renderEnfScatter, renderEnfTrend, renderEnfBar, renderEnfFines,

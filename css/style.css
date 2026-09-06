@@ -316,6 +316,7 @@ a { color: var(--series-1); }
   font-variant-numeric: tabular-nums;
 }
 .kpi-card .value.critical { color: var(--status-critical); }
+.kpi-card .value.good { color: var(--status-good); }
 .kpi-card .sub {
   font-size: 11px;
   color: var(--text-muted);
