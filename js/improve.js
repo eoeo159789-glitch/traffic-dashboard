@@ -335,6 +335,314 @@ const Improve = (() => {
   function exportEnfScatterCsv() { exportScatterCsv(lastEnfScatter, '改善趨勢_舉發變化對照'); }
   function exportFinesScatterCsv() { exportScatterCsv(lastFinesScatter, '改善趨勢_罰鍰變化對照'); }
 
+  // ============================================================
+  // 縣市道路安全結構關聯分析
+  // ------------------------------------------------------------
+  // 跟上面「改善趨勢」不同：這裡比較的是「縣市結構性因素」（道路長度、人口密度、
+  // 人口年齡結構等短期間不太會變動的縣市特徵），對照「安全結果」，用單一年度斷面
+  // 比較（而非起訖年比較）。安全結果一律標準化成「每十萬人／每萬人」比率或本身即為
+  // 比例的指標，讓不同人口規模的縣市可以公平比較。
+  // ============================================================
+
+  function indByName(name, county, year) {
+    const row = INDICATORS.find(i => i.indicator === name && i.county === county && i.year === year);
+    return row ? row.value : null;
+  }
+  function totalPopulation(county, year) {
+    const c = indByName('0-14歲人口數(人)', county, year);
+    const m = indByName('15-64歲人口數(人)', county, year);
+    const e = indByName('65歲以上人口數(人)', county, year);
+    if (c == null || m == null || e == null) return null;
+    return c + m + e;
+  }
+  function indicatorYears(name) {
+    return [...new Set(INDICATORS.filter(i => i.indicator === name && i.county === '__TOTAL__').map(i => i.year))].sort((a, b) => a - b);
+  }
+
+  const PEDESTRIAN_ACC_TYPES = ['人與汽(機)車', '人與車'];
+
+  const STRUCT_X_METRICS = {
+    roadPerCapita: {
+      label: '每萬人道路里程', unit: '公里',
+      years: () => indicatorYears('道路里程長度(公里)'),
+      value: (county, year) => {
+        const road = indByName('道路里程長度(公里)', county, year);
+        const pop = totalPopulation(county, year);
+        return (road == null || !pop) ? null : road / (pop / 10000);
+      },
+    },
+    popDensity: {
+      label: '人口密度', unit: '人/平方公里',
+      years: () => indicatorYears('人口密度(人/平方公里)'),
+      value: (county, year) => indByName('人口密度(人/平方公里)', county, year),
+    },
+    elderlyShare: {
+      label: '65歲以上人口比例', unit: '%',
+      years: () => indicatorYears('65歲以上人口數(人)'),
+      value: (county, year) => {
+        const e = indByName('65歲以上人口數(人)', county, year);
+        const pop = totalPopulation(county, year);
+        return (e == null || !pop) ? null : e / pop * 100;
+      },
+    },
+    childShare: {
+      label: '0-14歲人口比例', unit: '%',
+      years: () => indicatorYears('0-14歲人口數(人)'),
+      value: (county, year) => {
+        const c = indByName('0-14歲人口數(人)', county, year);
+        const pop = totalPopulation(county, year);
+        return (c == null || !pop) ? null : c / pop * 100;
+      },
+    },
+    vehiclePerCapita: {
+      label: '每萬人小客車登記數', unit: '輛',
+      years: () => indicatorYears('小客車登記數(輛)'),
+      value: (county, year) => {
+        const v = indByName('小客車登記數(輛)', county, year);
+        const pop = totalPopulation(county, year);
+        return (v == null || !pop) ? null : v / (pop / 10000);
+      },
+    },
+  };
+
+  const STRUCT_Y_METRICS = {
+    deathRatePer10w: {
+      label: '每十萬人死亡率（官方指標）', unit: '人',
+      years: () => indicatorYears(DEATH_RATE_INDICATOR),
+      value: (county, year) => indByName(DEATH_RATE_INDICATOR, county, year),
+    },
+    a1DeathsPer10w: {
+      label: 'A1死亡人數（每十萬人標準化）', unit: '人',
+      years: () => META.accidentYears.slice().sort((a, b) => a - b),
+      value: (county, year) => {
+        const pop = totalPopulation(county, year);
+        return pop ? a1Agg(county, year).deaths / pop * 100000 : null;
+      },
+    },
+    a2InjuriesPer10w: {
+      label: 'A2受傷人數（每十萬人標準化）', unit: '人',
+      years: () => (META.a2Years || []).slice().sort((a, b) => a - b),
+      value: (county, year) => {
+        const pop = totalPopulation(county, year);
+        return pop ? a2Agg(county, year).injuries / pop * 100000 : null;
+      },
+    },
+    officialAccidentRatePer10k: {
+      label: '道路交通事故肇事總件數（官方統計，每萬人標準化）', unit: '件',
+      years: () => indicatorYears('道路交通事故肇事總件數(件)'),
+      value: (county, year) => {
+        const v = indByName('道路交通事故肇事總件數(件)', county, year);
+        const pop = totalPopulation(county, year);
+        return (v == null || !pop) ? null : v / (pop / 10000);
+      },
+    },
+    a1PedestrianSharePct: {
+      label: 'A1死亡事故中行人涉入比例', unit: '%',
+      years: () => META.accidentYears.slice().sort((a, b) => a - b),
+      value: (county, year) => {
+        let total = 0, ped = 0;
+        ACCIDENTS.forEach(a => {
+          if (a.county !== county || a.year !== year) return;
+          total++;
+          if (PEDESTRIAN_ACC_TYPES.includes(a.accTypeMajor)) ped++;
+        });
+        return total === 0 ? null : ped / total * 100;
+      },
+    },
+    a2PedestrianSharePct: {
+      label: 'A2受傷事故中行人涉入比例', unit: '%',
+      years: () => [...new Set((window.A2_ACC_TYPE_MAJOR || []).map(r => r.year))].sort((a, b) => a - b),
+      value: (county, year) => {
+        let total = 0, ped = 0;
+        (window.A2_ACC_TYPE_MAJOR || []).forEach(r => {
+          if (r.county !== county || r.year !== year) return;
+          total += r.count;
+          if (PEDESTRIAN_ACC_TYPES.includes(r.accTypeMajor)) ped += r.count;
+        });
+        return total === 0 ? null : ped / total * 100;
+      },
+    },
+  };
+
+  let structState = { xMetric: 'elderlyShare', yMetric: 'deathRatePer10w', year: null };
+  let lastStructScatter = null;
+
+  function structYearsFor(xKey, yKey) {
+    return intersectYears(STRUCT_X_METRICS[xKey].years(), STRUCT_Y_METRICS[yKey].years());
+  }
+
+  function setupStructYearSelect(resetToLatest) {
+    const years = structYearsFor(structState.xMetric, structState.yMetric);
+    const sel = document.getElementById('structYearSelect');
+    sel.innerHTML = years.map(y => `<option value="${y}">${y}年</option>`).join('');
+    if (resetToLatest || !years.includes(structState.year)) {
+      structState.year = years.length ? years[years.length - 1] : null;
+    }
+    if (structState.year != null) sel.value = structState.year;
+  }
+
+  function renderStructScatterCard() {
+    const counties = [...State.filters.counties];
+    const xDef = STRUCT_X_METRICS[structState.xMetric];
+    const yDef = STRUCT_Y_METRICS[structState.yMetric];
+    const year = structState.year;
+    if (year == null) {
+      Charts.renderImproveScatter('structScatterChart', [], xDef.label, yDef.label, 0, 0, xDef.unit, yDef.unit);
+      document.getElementById('structQuadLegend').innerHTML = '';
+      lastStructScatter = null;
+      return;
+    }
+    const points = counties.map(c => ({ x: xDef.value(c, year), y: yDef.value(c, year), label: c }))
+      .filter(p => p.x !== null && p.y !== null && !isNaN(p.x) && !isNaN(p.y));
+    const meanX = meanOf(points.map(p => p.x));
+    const meanY = meanOf(points.map(p => p.y));
+    const groups = { 0: [], 1: [], 2: [], 3: [] };
+    const taggedPoints = points.map(p => {
+      const q = quadrantIndex(p.x, p.y, meanX, meanY);
+      groups[q].push(p.label);
+      return Object.assign({}, p, { q });
+    });
+    Charts.renderImproveScatter('structScatterChart', taggedPoints, xDef.label, yDef.label, meanX, meanY, xDef.unit, yDef.unit);
+    renderQuadrantLegend('structQuadLegend', groups, xDef.label, yDef.label);
+    lastStructScatter = { points: taggedPoints, meanX, meanY, xDef, yDef, year };
+  }
+
+  function exportStructCsv() {
+    if (!lastStructScatter || lastStructScatter.points.length === 0) { alert('目前條件下沒有可匯出的資料'); return; }
+    const { points, meanX, meanY, xDef, yDef, year } = lastStructScatter;
+    const descs = quadrantDescs(xDef.label, yDef.label);
+    const cols = [
+      { key: 'label', label: '縣市' },
+      { key: 'xText', label: `${xDef.label}${xDef.unit ? `(${xDef.unit})` : ''}` },
+      { key: 'yText', label: `${yDef.label}${yDef.unit ? `(${yDef.unit})` : ''}` },
+      { key: 'quadrant', label: '所在象限（分界為下方兩欄平均值）' },
+      { key: 'meanXText', label: `${xDef.label}平均${xDef.unit ? `(${xDef.unit})` : ''}（象限分界）` },
+      { key: 'meanYText', label: `${yDef.label}平均${yDef.unit ? `(${yDef.unit})` : ''}（象限分界）` },
+    ];
+    const rows = points.map(p => ({
+      label: p.label,
+      xText: p.x.toFixed(2),
+      yText: p.y.toFixed(2),
+      quadrant: descs[p.q],
+      meanXText: meanX.toFixed(2),
+      meanYText: meanY.toFixed(2),
+    }));
+    const csv = Util.toCsv(rows, cols);
+    Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `結構因素象限圖_${xDef.label}_vs_${yDef.label}_${year}_${Date.now()}.csv`);
+  }
+
+  function structMetricOptionsHtml(map) {
+    return Object.keys(map).map(k => `<option value="${k}">${map[k].label}</option>`).join('');
+  }
+
+  // ---------------- 當事者年齡結構 vs 人口年齡結構（涉入比） ----------------
+
+  const AGE_BRACKET_POP_INDICATOR = { '0-14': '0-14歲人口數(人)', '15-64': '15-64歲人口數(人)', '65+': '65歲以上人口數(人)' };
+  let a1AccidentIndex = null;
+  function getA1AccidentIndex() {
+    if (!a1AccidentIndex) {
+      a1AccidentIndex = new Map();
+      ACCIDENTS.forEach(a => a1AccidentIndex.set(a.id, { county: a.county, year: a.year }));
+    }
+    return a1AccidentIndex;
+  }
+
+  function a1AgeBracketCounts(county, startYear, endYear) {
+    const idx = getA1AccidentIndex();
+    const counts = { '0-14': 0, '15-64': 0, '65+': 0 };
+    let total = 0;
+    PARTIES.forEach(p => {
+      const info = idx.get(p.aid);
+      if (!info || info.county !== county || info.year < startYear || info.year > endYear) return;
+      const age = Number(p.age);
+      if (!Number.isFinite(age) || age < 0 || age > 130) return;
+      const b = age <= 14 ? '0-14' : (age <= 64 ? '15-64' : '65+');
+      counts[b]++; total++;
+    });
+    return { counts, total };
+  }
+
+  function a2AgeBracketCounts(county, startYear, endYear) {
+    const counts = { '0-14': 0, '15-64': 0, '65+': 0 };
+    let total = 0;
+    (window.A2_AGE_BRACKET || []).forEach(r => {
+      if (r.county !== county || r.year < startYear || r.year > endYear) return;
+      counts[r.bracket] = (counts[r.bracket] || 0) + r.count;
+      total += r.count;
+    });
+    return { counts, total };
+  }
+
+  function popShareForBracket(county, bracket, year) {
+    const bracketPop = indByName(AGE_BRACKET_POP_INDICATOR[bracket], county, year);
+    const totalPop = totalPopulation(county, year);
+    return (bracketPop == null || !totalPop) ? null : bracketPop / totalPop * 100;
+  }
+
+  function ageRatioYearsFor(source) {
+    return source === 'a1'
+      ? META.accidentYears.slice().sort((a, b) => a - b)
+      : [...new Set((window.A2_AGE_BRACKET || []).map(r => r.year))].sort((a, b) => a - b);
+  }
+
+  let ageRatioState = { source: 'a1', bracket: '65+', startYear: null, endYear: null };
+  let lastAgeRatio = null;
+
+  function setupAgeRatioYearSelects(resetToFullRange) {
+    const years = ageRatioYearsFor(ageRatioState.source);
+    const startSel = document.getElementById('ageRatioStartYear');
+    const endSel = document.getElementById('ageRatioEndYear');
+    startSel.innerHTML = years.map(y => `<option value="${y}">${y}年</option>`).join('');
+    endSel.innerHTML = years.map(y => `<option value="${y}">${y}年</option>`).join('');
+    if (resetToFullRange || !years.includes(ageRatioState.startYear) || !years.includes(ageRatioState.endYear)) {
+      ageRatioState.startYear = years[0];
+      ageRatioState.endYear = years[years.length - 1];
+    }
+    if (years.length > 0) {
+      startSel.value = ageRatioState.startYear;
+      endSel.value = ageRatioState.endYear;
+    }
+  }
+
+  function renderAgeRatioCard() {
+    const counties = [...State.filters.counties];
+    const { source, bracket, startYear, endYear } = ageRatioState;
+    const rows = counties.map(c => {
+      const { counts, total } = source === 'a1' ? a1AgeBracketCounts(c, startYear, endYear) : a2AgeBracketCounts(c, startYear, endYear);
+      if (!total) return null;
+      const partyShare = counts[bracket] / total * 100;
+      const popShare = popShareForBracket(c, bracket, endYear);
+      if (popShare == null || popShare === 0) return null;
+      return { county: c, partyShare, popShare, ratio: partyShare / popShare };
+    }).filter(Boolean).sort((a, b) => b.ratio - a.ratio);
+
+    Charts.renderRatioRank('ageRatioChart', rows, `涉入比（${bracket}歲，${source === 'a1' ? 'A1死亡事故' : 'A2受傷事故'}，${startYear}-${endYear}）`);
+    const excluded = counties.length - rows.length;
+    document.getElementById('ageRatioNote').textContent =
+      `目前顯示 ${rows.length} 個縣市${excluded > 0 ? `，另有 ${excluded} 個縣市因當事者樣本數過少或人口資料缺漏未列入` : ''}（人口比例採用 ${endYear} 年資料）。`;
+    lastAgeRatio = { rows, source, bracket, startYear, endYear };
+  }
+
+  function exportAgeRatioCsv() {
+    if (!lastAgeRatio || lastAgeRatio.rows.length === 0) { alert('目前條件下沒有可匯出的資料'); return; }
+    const { rows, source, bracket, startYear, endYear } = lastAgeRatio;
+    const cols = [
+      { key: 'county', label: '縣市' },
+      { key: 'partyShareText', label: `當事者中${bracket}歲佔比(%)` },
+      { key: 'popShareText', label: `人口中${bracket}歲佔比(%)（${endYear}年）` },
+      { key: 'ratioText', label: '涉入比（當事者佔比 ÷ 人口佔比）' },
+    ];
+    const dataRows = rows.map(r => ({
+      county: r.county,
+      partyShareText: r.partyShare.toFixed(1),
+      popShareText: r.popShare.toFixed(1),
+      ratioText: r.ratio.toFixed(2),
+    }));
+    const csv = Util.toCsv(dataRows, cols);
+    const sourceLabel = source === 'a1' ? 'A1死亡事故' : 'A2受傷事故';
+    Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `年齡涉入比_${sourceLabel}_${bracket}歲_${startYear}-${endYear}_${Date.now()}.csv`);
+  }
+
   // ---------------- 控制項綁定 ----------------
 
   function metricOptionsHtml() {
@@ -368,6 +676,29 @@ const Improve = (() => {
     document.getElementById('improveFinesStartYear').addEventListener('change', e => { finesState.startYear = Number(e.target.value); render(); });
     document.getElementById('improveFinesEndYear').addEventListener('change', e => { finesState.endYear = Number(e.target.value); render(); });
     document.getElementById('improveFinesExportCsv').addEventListener('click', exportFinesScatterCsv);
+
+    const structXSel = document.getElementById('structXMetric');
+    const structYSel = document.getElementById('structYMetric');
+    structXSel.innerHTML = structMetricOptionsHtml(STRUCT_X_METRICS);
+    structYSel.innerHTML = structMetricOptionsHtml(STRUCT_Y_METRICS);
+    structXSel.value = structState.xMetric;
+    structYSel.value = structState.yMetric;
+    setupStructYearSelect(true);
+    structXSel.addEventListener('change', () => { structState.xMetric = structXSel.value; setupStructYearSelect(false); render(); });
+    structYSel.addEventListener('change', () => { structState.yMetric = structYSel.value; setupStructYearSelect(false); render(); });
+    document.getElementById('structYearSelect').addEventListener('change', e => { structState.year = Number(e.target.value); render(); });
+    document.getElementById('structExportCsv').addEventListener('click', exportStructCsv);
+
+    const ageSourceSel = document.getElementById('ageRatioSource');
+    const ageBracketSel = document.getElementById('ageRatioBracket');
+    ageSourceSel.value = ageRatioState.source;
+    ageBracketSel.value = ageRatioState.bracket;
+    setupAgeRatioYearSelects(true);
+    ageSourceSel.addEventListener('change', () => { ageRatioState.source = ageSourceSel.value; setupAgeRatioYearSelects(true); render(); });
+    ageBracketSel.addEventListener('change', () => { ageRatioState.bracket = ageBracketSel.value; render(); });
+    document.getElementById('ageRatioStartYear').addEventListener('change', e => { ageRatioState.startYear = Number(e.target.value); render(); });
+    document.getElementById('ageRatioEndYear').addEventListener('change', e => { ageRatioState.endYear = Number(e.target.value); render(); });
+    document.getElementById('ageRatioExportCsv').addEventListener('click', exportAgeRatioCsv);
   }
 
   function render() {
@@ -376,6 +707,8 @@ const Improve = (() => {
     renderRankChart();
     renderEnfScatterCard();
     renderFinesScatterCard();
+    renderStructScatterCard();
+    renderAgeRatioCard();
   }
 
   function init() {

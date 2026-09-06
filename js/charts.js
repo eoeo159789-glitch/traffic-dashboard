@@ -583,12 +583,67 @@ const Charts = (() => {
     });
   }
 
+  // 當事者年齡結構 vs 人口年齡結構「涉入比」排行：rows = [{county, ratio}]
+  // ratio = 該縣市當事者中該齡層佔比 ÷ 該縣市人口中該齡層佔比；1.0 = 涉入比例與人口比例相同
+  // refLine 固定畫在 x=1 的虛線，ratio>=1 用 warning 色（高於人口比例），< 1 用藍色（低於人口比例）
+  function renderRatioRank(canvasId, rows, seriesLabel) {
+    const refLinePlugin = {
+      id: 'ratioRefLine',
+      afterDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea) return;
+        const xPix = scales.x.getPixelForValue(1);
+        ctx.save();
+        ctx.strokeStyle = Util.chartGridColor();
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xPix, chartArea.top);
+        ctx.lineTo(xPix, chartArea.bottom);
+        ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.fillStyle = Util.chartTextColor();
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('涉入比＝1.0（與人口比例相同）', Math.min(xPix + 4, chartArea.right - 160), chartArea.top + 2);
+        ctx.restore();
+      },
+    };
+
+    upsert(canvasId, {
+      type: 'bar',
+      data: {
+        labels: rows.map(r => r.county),
+        datasets: [{
+          label: seriesLabel,
+          data: rows.map(r => Number(r.ratio.toFixed(2))),
+          backgroundColor: rows.map(r => r.ratio >= 1 ? Util.STATUS.warning : Util.seriesColor(0)),
+          borderRadius: 4,
+        }],
+      },
+      options: baseOptions({
+        indexAxis: 'y',
+        plugins: { legend: { display: true } },
+        scales: {
+          x: { ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          y: { ticks: { color: Util.chartTextColor(), font: { size: 10 } }, grid: { display: false } },
+        },
+      }),
+      plugins: [refLinePlugin],
+    });
+  }
+
   // 舉發／罰鍰變化 vs 事故改善對照象限圖
   // points = [{x, y, label, q}]，q = 0~3 象限編號（由呼叫端依平均值算好，0=右上 1=左上 2=左下 3=右下）
   // meanX / meanY = 兩軸的平均值（象限分界線）
   const QUADRANT_COLORS = [Util.seriesColor(0), Util.seriesColor(2), Util.seriesColor(1), Util.seriesColor(7)];
 
-  function renderImproveScatter(canvasId, points, xLabel, yLabel, meanX, meanY) {
+  // xUnit / yUnit：附加在數值後面的單位文字（預設 '%'，維持既有改善%／變化% 圖表的行為）；
+  // 傳空字串 '' 表示不附加任何單位。
+  function renderImproveScatter(canvasId, points, xLabel, yLabel, meanX, meanY, xUnit = '%', yUnit = '%') {
     const quadLinesPlugin = {
       id: 'improveQuadLines',
       afterDraw(chart) {
@@ -614,12 +669,12 @@ const Charts = (() => {
         ctx.setLineDash([]);
         ctx.fillStyle = Util.chartTextColor();
         ctx.font = '11px sans-serif';
-        const xLabelText = `平均 ${Util.fmtNum(Math.round(meanX * 10) / 10)}%`;
+        const xLabelText = `平均 ${Util.fmtNum(Math.round(meanX * 10) / 10)}${xUnit}`;
         const xTextX = Math.min(Math.max(xPix + 4, chartArea.left + 2), chartArea.right - ctx.measureText(xLabelText).width - 2);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillText(xLabelText, xTextX, chartArea.top + 2);
-        const yLabelText = `平均 ${Util.fmtNum(Math.round(meanY * 10) / 10)}%`;
+        const yLabelText = `平均 ${Util.fmtNum(Math.round(meanY * 10) / 10)}${yUnit}`;
         ctx.textAlign = 'right';
         ctx.textBaseline = Math.abs(yPix - chartArea.top) < 14 ? 'top' : 'bottom';
         ctx.fillText(yLabelText, chartArea.right - 2, yPix - 2 >= chartArea.top ? yPix - 2 : yPix + 14);
@@ -643,13 +698,13 @@ const Charts = (() => {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (ctx) => `${ctx.raw.label}：${xLabel} ${Util.fmtNum(ctx.raw.x)}%，${yLabel} ${Util.fmtNum(ctx.raw.y)}%`,
+              label: (ctx) => `${ctx.raw.label}：${xLabel} ${Util.fmtNum(ctx.raw.x)}${xUnit}，${yLabel} ${Util.fmtNum(ctx.raw.y)}${yUnit}`,
             },
           },
         },
         scales: {
-          x: { title: { display: true, text: xLabel + '（%）', color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
-          y: { title: { display: true, text: yLabel + '（%）', color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          x: { title: { display: true, text: xLabel + (xUnit ? `（${xUnit}）` : ''), color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          y: { title: { display: true, text: yLabel + (yUnit ? `（${yUnit}）` : ''), color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
         },
       }),
       plugins: [quadLinesPlugin],
@@ -658,7 +713,7 @@ const Charts = (() => {
 
   return {
     upsert, exportPng, refreshTheme,
-    renderImproveRank, renderImproveScatter,
+    renderImproveRank, renderImproveScatter, renderRatioRank,
     renderTrend, renderCountyRank, renderSimpleDonut, renderHourChart,
     renderSingleDim, renderCauseChart, renderCrossTable,
     renderEnfScatter, renderEnfTrend, renderEnfBar, renderEnfFines,

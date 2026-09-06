@@ -405,6 +405,51 @@
           <div class="quad-legend" id="improveFinesQuadLegend"></div>
         </div>
       </div>
+
+      <div class="section-title" style="margin-top:8px">縣市道路安全結構關聯分析</div>
+      <p class="hint">以下卡片改用「縣市結構性因素」（道路長度、人口密度、人口年齡結構等，短期間內不太會改變的縣市特徵）對照「安全結果」，找出可能與交通安全相關、值得從政策面優先檢視的縣市特徵，而非追蹤逐年改善進度；因此改用<strong>單一年度斷面比較</strong>（而非起訖年比較），且為了讓不同人口規模的縣市能夠公平比較，安全結果一律換算成「每十萬人／每萬人」的標準化比率，不使用原始件數排行。</p>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>縣市結構因素 vs 安全結果 象限圖</h2>
+          <div class="card-tools">
+            年度：<select id="structYearSelect"></select>
+            <button class="btn" data-export-chart="structScatterChart">⭳ PNG</button>
+            <button class="btn" id="structExportCsv">⭳ 匯出 CSV</button>
+          </div>
+        </div>
+        <div class="card-tools" style="margin-bottom:8px">
+          X 軸（縣市結構因素）：<select id="structXMetric"></select>
+          Y 軸（安全結果）：<select id="structYMetric"></select>
+        </div>
+        <div class="chart-wrap tall" style="height:420px"><canvas id="structScatterChart"></canvas></div>
+        <p class="hint">兩條虛線為<strong>目前顯示縣市在 X、Y 軸的平均值</strong>，切成四象限凸顯縣市間的相對差異；下方清單列出各象限包含的縣市。安全結果一律使用「每十萬人／每萬人」標準化比率或本身即為比例的指標，方便不同人口規模的縣市互相比較。<strong>這裡呈現的是同一年度、跨縣市的橫斷面關聯，不是因果關係</strong>：道路長度、人口密度、高齡化程度等結構因素彼此高度相關（例如都會區道路多、人口也多、高齡人口占比通常較低），也都會同時受到都市發展程度影響，解讀時請留意，不宜直接推論「蓋更多路會更危險」或「人口越老越危險」之類的單一因果結論。</p>
+        <div class="quad-legend" id="structQuadLegend"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>當事者年齡結構 vs 人口年齡結構（涉入比）</h2>
+          <div class="card-tools">
+            資料來源：<select id="ageRatioSource">
+              <option value="a1">A1（死亡事故當事者）</option>
+              <option value="a2">A2（受傷事故當事者）</option>
+            </select>
+            年齡層：<select id="ageRatioBracket">
+              <option value="0-14">0-14歲</option>
+              <option value="15-64">15-64歲</option>
+              <option value="65+">65歲以上</option>
+            </select>
+            起始年：<select id="ageRatioStartYear"></select>
+            結束年：<select id="ageRatioEndYear"></select>
+            <button class="btn" data-export-chart="ageRatioChart">⭳ PNG</button>
+            <button class="btn" id="ageRatioExportCsv">⭳ 匯出 CSV</button>
+          </div>
+        </div>
+        <div class="chart-wrap tall" style="height:520px"><canvas id="ageRatioChart"></canvas></div>
+        <p class="hint" id="ageRatioNote"></p>
+        <p class="hint"><strong>涉入比</strong>定義為「該縣市『當事者』中此齡層所占比例 ÷ 該縣市『人口』中此齡層所占比例」（人口比例採用結束年資料）。涉入比＝1 代表該齡層在事故當事者中的占比恰好等於其人口占比；大於 1 代表該齡層在當事者中「相對超額」，小於 1 則是「相對偏低」。由於政府公開的 A1/A2 逐筆資料<strong>只記錄每一位當事者（含駕駛人、乘客、行人等所有涉入者）的年齡，並未標示該事故中誰是死者或誰是肇事責任方</strong>，因此本站以「A1（死亡事故）當事者年齡」作為死亡事故相關年齡結構的替代指標，並非「死者年齡」本身，請留意此資料限制。涉入比偏高不必然代表該齡層「肇事責任」較高，也可能反映該齡層本身的用路方式或暴露量（例如高齡者多為行人、步行機會較多）；65 歲以上或 0-14 歲若涉入比明顯偏高，通常較值得從行人安全、通學通勤動線等面向優先檢視。</p>
+      </div>
     </section>
 
     <!-- ============ 資料表與匯出 ============ -->
@@ -463,7 +508,9 @@
 <script src="data/a2_by_month.data.js"></script>
 <script src="data/a2_by_hour.data.js"></script>
 <script src="data/a2_acc_type_minor.data.js"></script>
+<script src="data/a2_acc_type_major.data.js"></script>
 <script src="data/a2_cause_minor.data.js"></script>
+<script src="data/a2_age_bracket.data.js"></script>
 <script src="data/a2_crosstab.data.js"></script>
 <script src="data/a2_geo.data.js"></script>
 

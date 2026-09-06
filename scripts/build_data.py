@@ -658,6 +658,23 @@ A2_CROSSTAB_DIMS = [
 FULL_EXPORT_DIR = os.path.join(BASE, "full_data_export")
 
 
+def age_bucket(age_str):
+    """把「當事者事故發生時年齡」字串轉成人口統計常用的三個年齡層，對應 縣市統計指標.xlsx
+    裡的「0-14歲人口數」「15-64歲人口數」「65歲以上人口數」三個指標，方便直接互相比較。
+    無法判讀（空字串、-1 等未知代碼）回傳 None，該筆不計入任何分母/分子。"""
+    try:
+        a = int(age_str)
+    except (ValueError, TypeError):
+        return None
+    if a < 0 or a > 130:
+        return None
+    if a <= 14:
+        return "0-14"
+    if a <= 64:
+        return "15-64"
+    return "65+"
+
+
 def load_a2(points=None, grid=None):
     """
     串流讀取 data_raw/a2/<年度>/*.csv（每年 10-15 個分割檔，單年可能高達 80-90 萬列）。
@@ -665,7 +682,10 @@ def load_a2(points=None, grid=None):
       - crosstab: 依 A2_CROSSTAB_DIMS + year 分組的件數/受傷人數
       - byMonth / byHour: 依年度+縣市+月份/時段 分組
       - byCounty: 依年度+縣市 分組（總計，供 KPI／排行用）
-      - accTypeMinor / causeMinor: 依年度+縣市+子類別 分組（供排行圖表用）
+      - accTypeMinor / accTypeMajor / causeMinor: 依年度+縣市+子類別（或大類別）分組（供排行圖表、
+        「事故類型 vs 人口結構」對照用）
+      - ageBracket: 依年度+縣市+年齡層（0-14／15-64／65歲以上）分組的「當事者人次」（逐筆列都計入，
+        不像其他分組只取當事者順位=1 的事故層級列；用於跟縣市人口年齡分層比較涉入比例）
       - geo: 依年度+縣市+經緯度網格 分組（供地圖熱力圖用）
       - bufferA2: 若有帶入 points/grid（熱點路口環域分析用），同一次掃描順便累積
         各點位在 BUFFER_RADII_M 各半徑內的 A2 件數/受傷人數（避免整份 A2 原始資料被重複掃描）
@@ -682,7 +702,9 @@ def load_a2(points=None, grid=None):
     by_hour = defaultdict(lambda: [0, 0])    # key: (year, county, hour)
     by_county = defaultdict(lambda: [0, 0])  # key: (year, county)
     acc_type_minor = defaultdict(lambda: [0, 0])  # key: (year, county, accTypeMinor)
+    acc_type_major = defaultdict(lambda: [0, 0])  # key: (year, county, accTypeMajor)
     cause_minor = defaultdict(lambda: [0, 0])     # key: (year, county, causeMinor)
+    age_bracket = defaultdict(int)           # key: (year, county, bracket) -> 當事者人次
     geo = defaultdict(lambda: [0, 0])        # key: (year, county, latBin, lngBin)
 
     do_buffer = bool(points and grid is not None)
@@ -724,17 +746,24 @@ def load_a2(points=None, grid=None):
                     if not re.match(r"^\d{4}$", raw_year):
                         continue  # 檔案尾端說明文字列
                     merged_writer.writerow(row)
+                    year = int(raw_year)
+                    county = extract_county_from_address(g(row, "發生地點"))
+
+                    # 當事者年齡分層：逐筆列都計入（不限當事者順位=1），供「當事者年齡結構 vs 縣市
+                    # 人口年齡結構」對照使用；年齡無法判讀（空白、-1 等）的列不計入任何分母/分子
+                    bracket = age_bucket(g(row, "當事者事故發生時年齡"))
+                    if bracket is not None:
+                        age_bracket[(year, county, bracket)] += 1
+
                     if g(row, "當事者順位").strip() != "1":
-                        continue  # 只取事故層級列（比照 A1 的處理方式）
+                        continue  # 以下只取事故層級列（比照 A1 的處理方式）
                     year_accidents += 1
                     total_accidents += 1
-                    year = int(raw_year)
                     month = int(g(row, "發生月份") or 0)
                     try:
                         hour = int((g(row, "發生時間") or "0").zfill(6)[:2])
                     except ValueError:
                         hour = None
-                    county = extract_county_from_address(g(row, "發生地點"))
                     _, injuries = parse_casualty(g(row, "死亡受傷人數"))
                     weather = g(row, "天候名稱")
                     light = g(row, "光線名稱")
@@ -762,6 +791,7 @@ def load_a2(points=None, grid=None):
                         e = by_hour[(year, county, hour)]; e[0] += 1; e[1] += injuries
                     e = by_county[(year, county)]; e[0] += 1; e[1] += injuries
                     e = acc_type_minor[(year, county, accTypeMinorV)]; e[0] += 1; e[1] += injuries
+                    e = acc_type_major[(year, county, accTypeMajor)]; e[0] += 1; e[1] += injuries
                     e = cause_minor[(year, county, causeMinorV)]; e[0] += 1; e[1] += injuries
 
                     try:
@@ -813,13 +843,20 @@ def load_a2(points=None, grid=None):
             out.append(row)
         return out
 
+    age_bracket_rows = [
+        {"year": y, "county": c, "bracket": b, "count": n}
+        for (y, c, b), n in age_bracket.items()
+    ]
+
     result = {
         "crosstab": dictify(crosstab, ["year"] + A2_CROSSTAB_DIMS),
         "byMonth": dictify(by_month, ["year", "county", "month"]),
         "byHour": dictify(by_hour, ["year", "county", "hour"]),
         "byCounty": dictify(by_county, ["year", "county"]),
         "accTypeMinor": dictify(acc_type_minor, ["year", "county", "accTypeMinor"]),
+        "accTypeMajor": dictify(acc_type_major, ["year", "county", "accTypeMajor"]),
         "causeMinor": dictify(cause_minor, ["year", "county", "causeMinor"]),
+        "ageBracket": age_bracket_rows,
         "geo": dictify(geo, ["year", "county", "lat", "lng"]),
         "exportManifest": export_manifest,
         "bufferA2": buf_a2,
@@ -912,7 +949,9 @@ def main():
         write_js("A2_BY_HOUR", a2["byHour"], "a2_by_hour.data.js")
         write_js("A2_BY_COUNTY", a2["byCounty"], "a2_by_county.data.js")
         write_js("A2_ACC_TYPE_MINOR", a2["accTypeMinor"], "a2_acc_type_minor.data.js")
+        write_js("A2_ACC_TYPE_MAJOR", a2["accTypeMajor"], "a2_acc_type_major.data.js")
         write_js("A2_CAUSE_MINOR", a2["causeMinor"], "a2_cause_minor.data.js")
+        write_js("A2_AGE_BRACKET", a2["ageBracket"], "a2_age_bracket.data.js")
         write_js("A2_GEO", a2["geo"], "a2_geo.data.js")
         write_js("POINT_BUFFER_A2", a2["bufferA2"], "point_buffer_a2.data.js")
     print("完成！")
