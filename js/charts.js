@@ -583,21 +583,76 @@ const Charts = (() => {
     });
   }
 
-  // 舉發／罰鍰變化 vs 事故改善對照散佈圖：points = [{x, y, label}]
-  function renderImproveScatter(canvasId, points, xLabel, yLabel) {
+  // 舉發／罰鍰變化 vs 事故改善對照象限圖
+  // points = [{x, y, label, q}]，q = 0~3 象限編號（由呼叫端依平均值算好，0=右上 1=左上 2=左下 3=右下）
+  // meanX / meanY = 兩軸的平均值（象限分界線）
+  const QUADRANT_COLORS = [Util.seriesColor(0), Util.seriesColor(2), Util.seriesColor(1), Util.seriesColor(7)];
+
+  function renderImproveScatter(canvasId, points, xLabel, yLabel, meanX, meanY) {
+    const quadLinesPlugin = {
+      id: 'improveQuadLines',
+      afterDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea) return;
+        const xPix = scales.x.getPixelForValue(meanX);
+        const yPix = scales.y.getPixelForValue(meanY);
+        ctx.save();
+        ctx.strokeStyle = Util.chartGridColor();
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xPix, chartArea.top);
+        ctx.lineTo(xPix, chartArea.bottom);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, yPix);
+        ctx.lineTo(chartArea.right, yPix);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.fillStyle = Util.chartTextColor();
+        ctx.font = '11px sans-serif';
+        const xLabelText = `平均 ${Util.fmtNum(Math.round(meanX * 10) / 10)}%`;
+        const xTextX = Math.min(Math.max(xPix + 4, chartArea.left + 2), chartArea.right - ctx.measureText(xLabelText).width - 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(xLabelText, xTextX, chartArea.top + 2);
+        const yLabelText = `平均 ${Util.fmtNum(Math.round(meanY * 10) / 10)}%`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = Math.abs(yPix - chartArea.top) < 14 ? 'top' : 'bottom';
+        ctx.fillText(yLabelText, chartArea.right - 2, yPix - 2 >= chartArea.top ? yPix - 2 : yPix + 14);
+        ctx.restore();
+      },
+    };
+
     upsert(canvasId, {
       type: 'scatter',
-      data: { datasets: [{ label: `${points.length} 個縣市`, data: points, backgroundColor: Util.seriesColor(4) }] },
+      data: {
+        datasets: [{
+          label: `${points.length} 個縣市`,
+          data: points,
+          backgroundColor: (ctx) => ctx.raw ? QUADRANT_COLORS[ctx.raw.q] : QUADRANT_COLORS[0],
+          pointRadius: 6,
+          pointHoverRadius: 8,
+        }],
+      },
       options: baseOptions({
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => `${ctx.raw.label}：${xLabel} ${Util.fmtNum(ctx.raw.x)}%，${yLabel} ${Util.fmtNum(ctx.raw.y)}%` } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.raw.label}：${xLabel} ${Util.fmtNum(ctx.raw.x)}%，${yLabel} ${Util.fmtNum(ctx.raw.y)}%`,
+            },
+          },
         },
         scales: {
           x: { title: { display: true, text: xLabel + '（%）', color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
           y: { title: { display: true, text: yLabel + '（%）', color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
         },
       }),
+      plugins: [quadLinesPlugin],
     });
   }
 

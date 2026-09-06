@@ -208,9 +208,47 @@ const Improve = (() => {
     }
   }
 
+  // 象限編號：0=右上(X高於平均,Y高於平均) 1=左上(X低於平均,Y高於平均) 2=左下(X低於平均,Y低於平均) 3=右下(X高於平均,Y低於平均)
+  // 需與 charts.js 的 QUADRANT_COLORS 順序一致
+  const QUAD_SWATCHES = ['#2a78d6', '#1baf7a', '#eb6834', '#e34948'];
+
+  function meanOf(arr) {
+    return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  }
+
+  function quadrantIndex(x, y, meanX, meanY) {
+    const xHigh = x >= meanX, yHigh = y >= meanY;
+    if (xHigh && yHigh) return 0;
+    if (!xHigh && yHigh) return 1;
+    if (!xHigh && !yHigh) return 2;
+    return 3;
+  }
+
+  function renderQuadrantLegend(elId, groups, xLabel, yLabel) {
+    const descs = [
+      `${xLabel}高於平均、${yLabel}高於平均`,
+      `${xLabel}低於平均、${yLabel}高於平均`,
+      `${xLabel}低於平均、${yLabel}低於平均`,
+      `${xLabel}高於平均、${yLabel}低於平均`,
+    ];
+    const html = [0, 1, 2, 3].map(q => {
+      const names = groups[q] || [];
+      return `
+        <div class="quad-box">
+          <div class="quad-box-head"><span class="quad-dot" style="background:${QUAD_SWATCHES[q]}"></span>${descs[q]}（${names.length} 縣市）</div>
+          <div class="quad-box-list">${names.length ? names.join('、') : '（無）'}</div>
+        </div>
+      `;
+    }).join('');
+    const el = document.getElementById(elId);
+    if (el) el.innerHTML = html;
+  }
+
   function renderEnfScatterCard() {
     const counties = [...State.filters.counties];
     const def = SAFETY_METRICS[enfState.metric];
+    const xLabel = '舉發總件數變化';
+    const yLabel = `${def.label}改善`;
     const points = counties.map(c => {
       const enfStart = enfTotal(c, enfState.startYear);
       const enfEnd = enfTotal(c, enfState.endYear);
@@ -220,12 +258,23 @@ const Improve = (() => {
       const y = improvePct(safeStart, safeEnd);
       return { x, y, label: c };
     }).filter(p => p.x !== null && p.y !== null);
-    Charts.renderImproveScatter('improveEnfScatterChart', points, '舉發總件數變化', `${def.label}改善`);
+    const meanX = meanOf(points.map(p => p.x));
+    const meanY = meanOf(points.map(p => p.y));
+    const groups = { 0: [], 1: [], 2: [], 3: [] };
+    const taggedPoints = points.map(p => {
+      const q = quadrantIndex(p.x, p.y, meanX, meanY);
+      groups[q].push(p.label);
+      return Object.assign({}, p, { q });
+    });
+    Charts.renderImproveScatter('improveEnfScatterChart', taggedPoints, xLabel, yLabel, meanX, meanY);
+    renderQuadrantLegend('improveEnfQuadLegend', groups, xLabel, yLabel);
   }
 
   function renderFinesScatterCard() {
     const counties = [...State.filters.counties];
     const def = SAFETY_METRICS[finesState.metric];
+    const xLabel = '罰鍰收入變化';
+    const yLabel = `${def.label}改善`;
     const points = counties.map(c => {
       const finesStart = finesAmount(c, finesState.startYear);
       const finesEnd = finesAmount(c, finesState.endYear);
@@ -235,7 +284,16 @@ const Improve = (() => {
       const y = improvePct(safeStart, safeEnd);
       return { x, y, label: c };
     }).filter(p => p.x !== null && p.y !== null);
-    Charts.renderImproveScatter('improveFinesScatterChart', points, '罰鍰收入變化', `${def.label}改善`);
+    const meanX = meanOf(points.map(p => p.x));
+    const meanY = meanOf(points.map(p => p.y));
+    const groups = { 0: [], 1: [], 2: [], 3: [] };
+    const taggedPoints = points.map(p => {
+      const q = quadrantIndex(p.x, p.y, meanX, meanY);
+      groups[q].push(p.label);
+      return Object.assign({}, p, { q });
+    });
+    Charts.renderImproveScatter('improveFinesScatterChart', taggedPoints, xLabel, yLabel, meanX, meanY);
+    renderQuadrantLegend('improveFinesQuadLegend', groups, xLabel, yLabel);
   }
 
   // ---------------- 控制項綁定 ----------------
