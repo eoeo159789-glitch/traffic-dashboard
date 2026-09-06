@@ -299,6 +299,19 @@
         </div>
         <div class="chart-wrap tall"><canvas id="enfBarChart"></canvas></div>
       </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>各縣市道路交通違規罰鍰收入分配金額（111–114年）</h2>
+          <div class="card-tools">
+            年度：<select id="finesYearSelect"></select>
+            <button class="btn" data-export-chart="finesChart">⭳ PNG</button>
+            <button class="btn" id="finesExportCsv">⭳ 匯出 CSV</button>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="finesChart"></canvas></div>
+        <p class="hint" id="finesNationalNote"></p>
+        <p class="hint">資料來源：政府資料開放平台（<a href="https://data.gov.tw/dataset/167869" target="_blank" rel="noopener">dataset 167869</a>）「道路交通違規罰鍰收入各縣市分配金額」，為警察機關舉發交通違規後，罰鍰收入依規定比例分配給各縣市的金額（單位：元），與「舉發件數」是兩份不同的統計（同一件舉發案件，罰鍰金額可能因車種、違規態樣、有無減免而不同，件數與金額不會等比例對應）。目前僅有 111–114 年（西元 2022–2025）資料；年度選單另有「合計」可看四年加總排行。此金額為縣市政府的實際罰鍰收入，並非該縣市的舉發件數或違規嚴重程度指標，僅供財政面向的參考對照，不建議直接拿來跟事故或死傷數字做因果推論（例如都會區道路多、車流大，罰鍰收入通常也較高，但不代表交通安全較差；也可能反映該縣市執法強度或稽查密度較高）。</p>
+      </div>
     </section>
 
     <!-- ============ 事故 vs 人口/縣市 ============ -->
@@ -329,6 +342,7 @@
         </div>
         <div class="chart-wrap tall"><canvas id="longTrendChart"></canvas></div>
         <p class="hint">此圖取用官方長期統計指標，年度範圍不受左側「年度」篩選限制（僅受縣市篩選影響，縣市多選時取加總或平均如各指標定義）。</p>
+        <p class="hint"><strong>名詞定義（每十萬人死亡人數）：</strong>左軸數字是「每十萬人口中，因意外事故死亡的人數」，<strong>不是百分比（%），也不是死亡機率</strong>。例如數值 30，代表每 10 萬人中約有 30 人死亡（＝十萬分之三十＝0.03%），而不是「30% 的人會死亡」。官方定義為：依國際疾病分類標準第十版（ICD-10），死亡原因代碼落在 V01–X59、Y85–Y86 範圍者列為「事故傷害死亡」；計算公式為「事故傷害死亡人數 ÷ 年中人口數 × 100,000」。「事故傷害」涵蓋範圍比「交通事故」更廣，包含運輸事故（含道路交通事故）、跌倒／跌落、溺水、火災燒燙傷、中毒、機械傷害等所有非蓄意意外死亡，因此不能直接等同於「交通事故死亡率」。資料來源為行政院主計總處「縣市重要統計指標」（依衛生福利部死因統計），與本站自行統計的 A1/A2 交通事故資料是分開的兩份資料，僅供對照參考。另外，官方自民國 112 年（2023）起，若當年死亡人數未滿 20 人，因樣本數過小、比率不具可靠性，會以「*」標示而非實際數值；民國 93 年（2004）以前，此指標原名為「意外事故死亡率」。</p>
       </div>
     </section>
 
@@ -377,6 +391,7 @@
 <script src="data/parties.data.js"></script>
 <script src="data/enforcement.data.js"></script>
 <script src="data/indicators.data.js"></script>
+<script src="data/enforcement_fines.data.js"></script>
 <script src="data/a2_export_manifest.data.js"></script>
 <script src="data/points_hotspot1000.data.js"></script>
 <script src="data/points_safety799.data.js"></script>

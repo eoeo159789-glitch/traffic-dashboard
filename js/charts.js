@@ -424,6 +424,39 @@ const Charts = (() => {
     });
   }
 
+  // 各縣市道路交通違規罰鍰收入分配金額（111-114年，資料來源：政府資料開放平台 dataset 167869）
+  // yearOrTotal 為西元年（2022-2025）數字，或字串 'total' 代表四年合計排行
+  function renderEnfFines(counties, yearOrTotal) {
+    const F = window.ENFORCEMENT_FINES;
+    if (!F || !F.years || F.years.length === 0) return;
+    let rows;
+    let label;
+    if (yearOrTotal === 'total') {
+      rows = F.totals.filter(t => counties.includes(t.county) && t.total != null).map(t => ({ c: t.county, amount: t.total }));
+      label = `${F.years[0]}–${F.years[F.years.length - 1]}年合計罰鍰收入（萬元）`;
+    } else {
+      const year = Number(yearOrTotal);
+      rows = F.records.filter(r => r.year === year && counties.includes(r.county)).map(r => ({ c: r.county, amount: r.amount }));
+      label = `${year}年罰鍰收入（萬元）`;
+    }
+    rows.sort((a, b) => b.amount - a.amount);
+    upsert('finesChart', {
+      type: 'bar',
+      data: {
+        labels: rows.map(r => r.c),
+        datasets: [{ label, data: rows.map(r => Number((r.amount / 10000).toFixed(1))), backgroundColor: Util.seriesColor(3), borderRadius: 4 }],
+      },
+      options: baseOptions({
+        indexAxis: 'y',
+        plugins: { legend: { display: true } },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          y: { ticks: { color: Util.chartTextColor(), font: { size: 10 } }, grid: { display: false } },
+        },
+      }),
+    });
+  }
+
   // ---------------- 事故 vs 人口/縣市 ----------------
 
   function renderPopRate(counties, year) {
@@ -517,7 +550,7 @@ const Charts = (() => {
       options: baseOptions({
         scales: {
           x: { ticks: { color: Util.chartTextColor(), maxTicksLimit: 15 }, grid: { display: false } },
-          y: { position: 'left', ticks: { color: Util.STATUS.critical }, grid: { color: Util.chartGridColor() }, title: { display: true, text: '死亡率', color: Util.STATUS.critical } },
+          y: { position: 'left', ticks: { color: Util.STATUS.critical }, grid: { color: Util.chartGridColor() }, title: { display: true, text: '每十萬人死亡人數(人)', color: Util.STATUS.critical } },
           y1: { position: 'right', ticks: { color: Util.seriesColor(0) }, grid: { display: false }, title: { display: true, text: '人口數', color: Util.seriesColor(0) } },
         },
       }),
@@ -528,7 +561,7 @@ const Charts = (() => {
     upsert, exportPng, refreshTheme,
     renderTrend, renderCountyRank, renderSimpleDonut, renderHourChart,
     renderSingleDim, renderCauseChart, renderCrossTable,
-    renderEnfScatter, renderEnfTrend, renderEnfBar,
+    renderEnfScatter, renderEnfTrend, renderEnfBar, renderEnfFines,
     renderPopRate, renderDensityScatter, renderLongTrend,
     renderA2Trend, renderA2CountyRank, renderCrossTableAgg, renderSingleDimAgg, renderCauseChartAgg,
   };

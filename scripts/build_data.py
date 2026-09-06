@@ -356,6 +356,128 @@ def load_indicators():
 
 
 # ---------------------------------------------------------------------------
+# 3b) 各縣市道路交通違規罰鍰收入分配金額（111-114年）
+# ---------------------------------------------------------------------------
+
+def load_enforcement_fines():
+    """
+    來源檔案：data_raw/enforcement_fines/ 底下的 xlsx（政府資料開放平台 dataset 167869）
+    工作表「道路交通違規罰鍰收入各縣市分配金額」結構：
+      標題列 '分配單位名稱','111年','112年','113年','114年','合計','排名'
+      22 個縣市資料列
+      空列
+      '小計'（22縣市加總）
+      空列
+      其他全國性彙總列（國道公路建設管理基金／解繳國庫／罰鍰總收入…，通常只有 111 年有數字）
+    回傳 None 表示找不到檔案／工作表（不會中斷整體建置流程）。
+    """
+    files = sorted(glob.glob(os.path.join(RAW, "enforcement_fines", "*.xlsx")))
+    if not files:
+        return None
+    fp = files[0]
+    sheet_name = "道路交通違規罰鍰收入各縣市分配金額"
+    wb = CalamineWorkbook.from_path(fp)
+    if sheet_name not in wb.sheet_names:
+        print(f"  [enforcement_fines] WARNING: {os.path.basename(fp)} 找不到工作表 {sheet_name}")
+        return None
+    rows = wb.get_sheet_by_name(sheet_name).to_python()
+
+    header_idx = None
+    for i, r in enumerate(rows):
+        if r and str(r[0]).strip() == "分配單位名稱":
+            header_idx = i
+            break
+    if header_idx is None:
+        print(f"  [enforcement_fines] WARNING: {os.path.basename(fp)} 找不到標題列")
+        return None
+    header = rows[header_idx]
+
+    year_cols = []  # [(col_idx, 西元年)]
+    total_col = None
+    rank_col = None
+    for col_idx in range(1, len(header)):
+        h = str(header[col_idx]).strip() if header[col_idx] is not None else ""
+        m = re.match(r"^(\d{2,3})年$", h)
+        if m:
+            year_cols.append((col_idx, int(m.group(1)) + 1911))
+        elif h == "合計":
+            total_col = col_idx
+        elif h == "排名":
+            rank_col = col_idx
+
+    def num_or_none(v):
+        return int(v) if isinstance(v, (int, float)) else None
+
+    records = []       # [{year, county, amount}]，比照 INDICATORS 的攤平格式，方便依年度篩選畫圖
+    totals = []         # [{county, total, rank}]，22 縣市四年合計排行
+    national_by_year = {}  # {year: 全國(22縣市)合計金額}
+    national_total = None
+
+    i = header_idx + 1
+    subtotal_seen = False
+    while i < len(rows):
+        r = rows[i]
+        c0 = str(r[0]).strip() if r and r[0] is not None else ""
+        if not c0:
+            i += 1
+            continue
+        county = normalize_county(c0)
+        if county:
+            for col_idx, year in year_cols:
+                amt = num_or_none(r[col_idx]) if col_idx < len(r) else None
+                if amt is not None:
+                    records.append({"year": year, "county": county, "amount": amt})
+            totals.append({
+                "county": county,
+                "total": num_or_none(r[total_col]) if total_col is not None and total_col < len(r) else None,
+                "rank": num_or_none(r[rank_col]) if rank_col is not None and rank_col < len(r) else None,
+            })
+            i += 1
+            continue
+        if c0 == "小計" and not subtotal_seen:
+            # 22 縣市分配金額合計（之後可能還有一個「國道公路建設管理基金」的小計列，用 subtotal_seen 避免誤取）
+            for col_idx, year in year_cols:
+                v = num_or_none(r[col_idx]) if col_idx < len(r) else None
+                if v is not None:
+                    national_by_year[year] = v
+            if total_col is not None and total_col < len(r):
+                national_total = num_or_none(r[total_col])
+            subtotal_seen = True
+            i += 1
+            continue
+        i += 1
+
+    # 補充：檔案中僅 111 年齊全的全國性彙總數字（國道公路建設管理基金、解繳國庫、罰鍰總收入），
+    # 這些不是「各縣市」分配金額，僅供對照參考，不納入縣市排行圖表。
+    extra_first_year = {}
+    label_map = {
+        "國道公路建設管理基金": "highwayFund",
+        "解繳國庫": "remittedToTreasury",
+        "罰鍰總收入": "totalRevenue",
+    }
+    first_year = min(y for _, y in year_cols) if year_cols else None
+    for r in rows[header_idx + 1:]:
+        c0 = str(r[0]).strip() if r and r[0] is not None else ""
+        if c0 in label_map and len(r) > 1:
+            v = num_or_none(r[1])
+            if v is not None:
+                extra_first_year[label_map[c0]] = v
+
+    years_sorted = sorted(set(y for _, y in year_cols))
+    totals.sort(key=lambda x: (x["rank"] is None, x["rank"]))
+    print(f"  [enforcement_fines] {os.path.basename(fp)}: {len(totals)} 縣市 x {len(years_sorted)} 年度")
+    return {
+        "years": years_sorted,
+        "records": records,
+        "totals": totals,
+        "nationalByYear": national_by_year,
+        "nationalTotal": national_total,
+        "extraFirstYear": {"year": first_year, **extra_first_year} if extra_first_year else None,
+        "sourceNote": "政府資料開放平台 https://data.gov.tw/dataset/167869",
+    }
+
+
+# ---------------------------------------------------------------------------
 # 熱點路口資料（1000 易肇事路口 + 799 人行安全計畫補助地點）與環域分析
 # ---------------------------------------------------------------------------
 
@@ -730,6 +852,8 @@ def main():
     enforcement = load_enforcement()
     print("=== 建置縣市統計指標資料 ===")
     indicators = load_indicators()
+    print("=== 建置各縣市道路交通違規罰鍰收入資料 ===")
+    enforcement_fines = load_enforcement_fines()
 
     print("=== 建置熱點路口資料（1000易肇事路口 + 799人行安全計畫補助地點）===")
     hotspot1000 = load_hotspot1000()
@@ -763,6 +887,7 @@ def main():
         "bufferRadii": BUFFER_RADII_M,
         "hotspot1000Count": len(hotspot1000),
         "safety799Count": len(safety799),
+        "finesYears": enforcement_fines["years"] if enforcement_fines else [],
         "generatedAt": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -771,6 +896,10 @@ def main():
     write_js("PARTIES", parties, "parties.data.js")
     write_js("ENFORCEMENT", enforcement, "enforcement.data.js")
     write_js("INDICATORS", indicators, "indicators.data.js")
+    write_js("ENFORCEMENT_FINES", enforcement_fines or {
+        "years": [], "records": [], "totals": [], "nationalByYear": {}, "nationalTotal": None,
+        "extraFirstYear": None, "sourceNote": "",
+    }, "enforcement_fines.data.js")
     write_js("META", meta, "meta.data.js")
     write_js("POINTS_HOTSPOT1000", hotspot1000, "points_hotspot1000.data.js")
     write_js("POINTS_SAFETY799", safety799, "points_safety799.data.js")

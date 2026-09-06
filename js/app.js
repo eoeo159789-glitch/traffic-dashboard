@@ -168,6 +168,53 @@
     Charts.renderEnfScatter(counties, years, category, accByCounty);
     Charts.renderEnfTrend(counties);
     Charts.renderEnfBar(counties, years, accByCounty, deathsByCounty);
+
+    const finesYearSel = document.getElementById('finesYearSelect');
+    if (finesYearSel && window.ENFORCEMENT_FINES && ENFORCEMENT_FINES.years.length > 0) {
+      const yearOrTotal = finesYearSel.value === 'total' ? 'total' : Number(finesYearSel.value);
+      Charts.renderEnfFines(counties, yearOrTotal);
+      const noteEl = document.getElementById('finesNationalNote');
+      const F = ENFORCEMENT_FINES;
+      if (noteEl) {
+        if (yearOrTotal === 'total') {
+          noteEl.textContent = `全國（22縣市）${F.years[0]}–${F.years[F.years.length - 1]}年合計罰鍰收入：約 ${Util.fmtNum(Math.round(F.nationalTotal / 10000))} 萬元。`;
+        } else {
+          const amt = F.nationalByYear[yearOrTotal];
+          let text = `全國（22縣市）${yearOrTotal}年合計罰鍰收入：約 ${Util.fmtNum(Math.round(amt / 10000))} 萬元。`;
+          if (F.extraFirstYear && F.extraFirstYear.year === yearOrTotal) {
+            text += `（${yearOrTotal}年另有全國性彙總數字供參考：國道公路建設管理基金 ${Util.fmtNum(Math.round(F.extraFirstYear.highwayFund / 10000))} 萬元、解繳國庫 ${Util.fmtNum(Math.round(F.extraFirstYear.remittedToTreasury / 10000))} 萬元、罰鍰總收入 ${Util.fmtNum(Math.round(F.extraFirstYear.totalRevenue / 10000))} 萬元，其餘年度資料來源尚未公布對應項目。）`;
+          }
+          noteEl.textContent = text;
+        }
+      }
+    }
+  }
+
+  function exportFinesCsv() {
+    if (!window.ENFORCEMENT_FINES || !ENFORCEMENT_FINES.years.length) return;
+    const F = ENFORCEMENT_FINES;
+    const counties = [...State.filters.counties];
+    const totalsByCounty = new Map(F.totals.map(t => [t.county, t]));
+    const rows = counties.filter(c => totalsByCounty.has(c)).map(c => {
+      const t = totalsByCounty.get(c);
+      const row = { 縣市: c };
+      F.years.forEach(y => {
+        const rec = F.records.find(r => r.year === y && r.county === c);
+        row[`${y}年(元)`] = rec ? rec.amount : '';
+      });
+      row['合計(元)'] = t.total;
+      row['排名'] = t.rank;
+      return row;
+    }).sort((a, b) => (a['排名'] ?? 999) - (b['排名'] ?? 999));
+    if (rows.length === 0) { alert('目前縣市篩選條件下沒有符合的資料可以匯出'); return; }
+    const cols = [
+      { key: '縣市', label: '縣市' },
+      ...F.years.map(y => ({ key: `${y}年(元)`, label: `${y}年(元)`, numeric: true })),
+      { key: '合計(元)', label: '合計(元)', numeric: true },
+      { key: '排名', label: '排名', numeric: true },
+    ];
+    const csv = Util.toCsv(rows, cols);
+    Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `各縣市道路交通違規罰鍰收入_${Date.now()}.csv`);
   }
 
   function renderPopulationTab(accidents) {
@@ -270,6 +317,16 @@
 
     document.getElementById('enfCategorySelect').innerHTML = META.enforcementCategories.map(c => `<option value="${c}">${c}</option>`).join('');
     document.getElementById('enfCategorySelect').addEventListener('change', renderCurrentTab);
+
+    const finesYearSel = document.getElementById('finesYearSelect');
+    if (finesYearSel && window.ENFORCEMENT_FINES && ENFORCEMENT_FINES.years.length > 0) {
+      const fy = ENFORCEMENT_FINES.years;
+      finesYearSel.innerHTML = fy.map(y => `<option value="${y}">${y}年</option>`).join('') +
+        `<option value="total">合計（${fy[0]}–${fy[fy.length - 1]}年）</option>`;
+      finesYearSel.value = fy[fy.length - 1];
+      finesYearSel.addEventListener('change', renderCurrentTab);
+    }
+    document.getElementById('finesExportCsv').addEventListener('click', exportFinesCsv);
 
     const popYears = META.accidentYears;
     document.getElementById('popYearSelect').innerHTML = popYears.map(y => `<option value="${y}">${y}年</option>`).join('');
