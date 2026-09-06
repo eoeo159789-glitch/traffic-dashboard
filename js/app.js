@@ -424,17 +424,21 @@
       townshipSel.value = townships.includes(prev) ? prev : '';
     }
 
+    const MAP_DRAW_CAP = 300;
+
     function refreshPointOptions() {
       const dataset = datasetSel.value;
       const filtered = currentFilteredPoints();
       const limited = filtered.slice(0, 300);
-      pointSel.innerHTML = limited.map(p => `<option value="${p.id}">${labelFor(p, dataset)}</option>`).join('');
+      const blankOpt = `<option value="">（不指定單一點位，直接依上方篩選條件查詢／匯出全部 ${filtered.length} 筆）</option>`;
+      pointSel.innerHTML = blankOpt + limited.map(p => `<option value="${p.id}">${labelFor(p, dataset)}</option>`).join('');
       if (filtered.length > limited.length) {
         const opt = document.createElement('option');
         opt.disabled = true;
-        opt.textContent = `…符合 ${filtered.length} 筆，僅顯示前 ${limited.length} 筆，請輸入關鍵字或選擇縣市／鄉鎮縮小範圍`;
+        opt.textContent = `…符合 ${filtered.length} 筆，僅顯示前 ${limited.length} 筆可選，請輸入關鍵字或選擇縣市／鄉鎮縮小範圍以選擇單一點位`;
         pointSel.appendChild(opt);
       }
+      pointSel.value = '';
     }
 
     datasetSel.addEventListener('change', () => {
@@ -455,17 +459,31 @@
     queryBtn.addEventListener('click', () => {
       const dataset = datasetSel.value;
       const pointId = pointSel.value;
-      if (!pointId) { alert('請先從清單中選擇一個點位'); return; }
-      const pts = State.pointsByDataset(dataset);
-      const p = pts.find(x => x.id === pointId);
-      if (!p) return;
       const radius = Number(radiusInput.value);
       if (!isFinite(radius) || radius <= 0) { alert('請輸入有效的半徑（公尺）'); return; }
-      const s = State.pointStatsAtRadius(p, radius);
-      MapView.setCustomPoint(p.lat, p.lng, radius);
-      const label = labelFor(p, dataset);
-      const precisionNote = s.exactA2 ? '〔精確統計〕' : '〔A1精確／A2為概略估算，如需精確請將半徑設為 50/100/200/300/500/1000 公尺〕';
-      resultText.textContent = `${label}｜半徑 ${radius}m 內：A1 ${Util.fmtNum(s.a1Count)} 件（死亡 ${s.a1Deaths}／受傷 ${s.a1Injuries}）／A2 ${Util.fmtNum(s.a2Count)} 件（受傷 ${Util.fmtNum(s.a2Injuries)}）${precisionNote}`;
+
+      if (pointId) {
+        // 指定單一點位：畫出該點位的環域圓圈並顯示該點位的統計
+        const pts = State.pointsByDataset(dataset);
+        const p = pts.find(x => x.id === pointId);
+        if (!p) return;
+        const s = State.pointStatsAtRadius(p, radius);
+        MapView.setCustomPoint(p.lat, p.lng, radius);
+        const label = labelFor(p, dataset);
+        const precisionNote = s.exactA2 ? '〔精確統計〕' : '〔A1精確／A2為概略估算，如需精確請將半徑設為 50/100/200/300/500/1000 公尺〕';
+        resultText.textContent = `${label}｜半徑 ${radius}m 內：A1 ${Util.fmtNum(s.a1Count)} 件（死亡 ${s.a1Deaths}／受傷 ${s.a1Injuries}）／A2 ${Util.fmtNum(s.a2Count)} 件（受傷 ${Util.fmtNum(s.a2Injuries)}）${precisionNote}`;
+      } else {
+        // 未指定單一點位：依目前縣市／鄉鎮／關鍵字篩選，一次查詢所有符合的點位。
+        // 這裡用「去重」的合計方式（同一筆事故／同一個 A2 網格只要落在任一點位半徑內就算一次），
+        // 避免點位彼此靠近時，同一筆資料被每個點位各自的環域重複計入、導致總數失真膨脹。
+        const pts = currentFilteredPoints();
+        if (pts.length === 0) { alert('目前的縣市／鄉鎮／關鍵字篩選條件下沒有符合的點位'); return; }
+        const agg = State.aggregateBufferStats(pts, radius);
+        MapView.setCustomPoints(pts.slice(0, MAP_DRAW_CAP).map(p => ({ lat: p.lat, lng: p.lng })), radius);
+        const scopeLabel = [countySel.value, townshipSel.value].filter(Boolean).join('') || '全部';
+        const capNote = pts.length > MAP_DRAW_CAP ? `（地圖僅顯示前 ${MAP_DRAW_CAP} 個點位的範圍圈，統計已包含全部 ${pts.length} 個點位）` : '';
+        resultText.textContent = `${scopeLabel}（共 ${pts.length} 個點位，範圍已去重不重複計算）合計｜半徑 ${radius}m 內：A1 ${Util.fmtNum(agg.a1Count)} 件（死亡 ${agg.a1Deaths}／受傷 ${agg.a1Injuries}）／A2 ${Util.fmtNum(agg.a2Count)} 件（受傷 ${Util.fmtNum(agg.a2Injuries)}）〔A1精確／A2為概略估算〕${capNote}`;
+      }
       resultRow.hidden = false;
       if (document.querySelector('.tab-btn[data-tab="map"]') && currentTab !== 'map') {
         document.querySelector('.tab-btn[data-tab="map"]').click();

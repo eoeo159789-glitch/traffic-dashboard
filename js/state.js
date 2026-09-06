@@ -181,12 +181,39 @@ const State = (() => {
     };
   }
 
+  // 多個點位「合計」統計（熱點查詢未指定單一點位、依篩選條件一次查詢全部點位時使用）：
+  // 不能直接把每個點位各自的環域統計加總，因為點位彼此靠近時同一起事故／同一個 A2 網格會落在多個點位的半徑內而被重複計算，
+  // 導致總數被嚴重高估。因此改成「去重」計算：每一筆事故／每個 A2 網格只要落在「任一」篩選點位的半徑內就算一次。
+  // A1 資料量小可即時逐筆精確比對；A2 仍沿用網格概略估算（同 customBufferStats），因此此函式的 A2 一律標記為概略估算。
+  function aggregateBufferStats(points, radiusM) {
+    let a1Count = 0, a1Deaths = 0, a1Injuries = 0;
+    ACCIDENTS.forEach(a => {
+      if (a.lat == null || a.lng == null) return;
+      for (let i = 0; i < points.length; i++) {
+        if (Util.distMeters(points[i].lat, points[i].lng, a.lat, a.lng) <= radiusM) {
+          a1Count++; a1Deaths += a.deaths; a1Injuries += a.injuries;
+          break;
+        }
+      }
+    });
+    let a2Count = 0, a2Injuries = 0;
+    (window.A2_GEO || []).forEach(g => {
+      for (let i = 0; i < points.length; i++) {
+        if (Util.distMeters(points[i].lat, points[i].lng, g.lat, g.lng) <= radiusM + 800) {
+          a2Count += g.count; a2Injuries += g.injuries;
+          break;
+        }
+      }
+    });
+    return { a1Count, a1Deaths, a1Injuries, a2Count, a2Injuries, exactA2: false };
+  }
+
   return {
     DIMENSIONS, filters, uniqueValues, matches, filtered, invalidate,
     toggleInSet, setAll, resetAll, onChange, partiesFor,
     a2CrosstabFiltered, a2ByCountyFiltered, a2ByMonthFiltered, a2ByHourFiltered,
     a2AccTypeMinorFiltered, a2CauseMinorFiltered, a2GeoFiltered,
     hotspotPoints, safety799Points, pointsByDataset, bufferA1For, bufferA2For, geoJump, customBufferStats,
-    pointStatsAtRadius,
+    pointStatsAtRadius, aggregateBufferStats,
   };
 })();

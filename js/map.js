@@ -4,7 +4,7 @@
 // 另提供座標定位／縣市鄉鎮跳轉、自訂座標環域分析
 // ============================================================
 const MapView = (() => {
-  let map, clusterLayer, a1HeatLayer, a2HeatLayer, hotspotLayer, safety799Layer, customMarker, customCircle;
+  let map, clusterLayer, a1HeatLayer, a2HeatLayer, hotspotLayer, safety799Layer, customMarker, customCircle, customMultiLayer;
   const DEFAULT_POPUP_RADIUS = 200; // 點位彈窗預設顯示的環域半徑（公尺）
 
   function init() {
@@ -205,9 +205,29 @@ const MapView = (() => {
     if (customCircle) customCircle.setRadius(radiusM);
   }
 
+  // 未指定單一點位時：依篩選條件一次顯示多個點位的環域範圍圈（供「熱點查詢」不選點位時使用）
+  function setCustomPoints(points, radiusM) {
+    if (!map) init();
+    if (customMarker) { map.removeLayer(customMarker); customMarker = null; }
+    if (customCircle) { map.removeLayer(customCircle); customCircle = null; }
+    if (customMultiLayer) { map.removeLayer(customMultiLayer); customMultiLayer = null; }
+    if (!points || points.length === 0) return;
+    customMultiLayer = L.layerGroup();
+    const bounds = [];
+    points.forEach(p => {
+      L.circleMarker([p.lat, p.lng], { radius: 4, color: '#0ca30c', weight: 2, fillOpacity: 0.9 }).addTo(customMultiLayer);
+      L.circle([p.lat, p.lng], { radius: radiusM, color: '#0ca30c', weight: 1.5, fillOpacity: 0.06 }).addTo(customMultiLayer);
+      bounds.push([p.lat, p.lng]);
+    });
+    customMultiLayer.addTo(map);
+    if (bounds.length === 1) map.setView(bounds[0], 15);
+    else map.fitBounds(bounds, { padding: [40, 40] });
+  }
+
   function clearCustomPoint() {
     if (customMarker) { map.removeLayer(customMarker); customMarker = null; }
     if (customCircle) { map.removeLayer(customCircle); customCircle = null; }
+    if (customMultiLayer) { map.removeLayer(customMultiLayer); customMultiLayer = null; }
   }
 
   async function exportPng() {
@@ -221,6 +241,6 @@ const MapView = (() => {
 
   return {
     init, render, invalidateSize, exportPng,
-    jumpTo, setCustomPoint, updateCustomRadius, clearCustomPoint,
+    jumpTo, setCustomPoint, updateCustomRadius, clearCustomPoint, setCustomPoints,
   };
 })();
