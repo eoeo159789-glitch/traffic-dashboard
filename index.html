@@ -383,6 +383,7 @@
             起始年：<select id="improveEnfStartYear"></select>
             結束年：<select id="improveEnfEndYear"></select>
             <button class="btn" data-export-chart="improveEnfScatterChart">⭳ PNG</button>
+            <button class="btn" id="improveEnfExportCsv">⭳ 匯出 CSV</button>
           </div>
           <div class="chart-wrap tall"><canvas id="improveEnfScatterChart"></canvas></div>
           <p class="hint">X 軸為該縣市「舉發總件數」變化%（正值＝增加，負值＝減少，純描述變化方向，不代表好壞）；Y 軸為所選事故指標的改善%（正值＝改善）。圖上兩條虛線分別為<strong>目前顯示縣市在 X、Y 軸的平均值</strong>，將圖表切成四個象限，用來凸顯各縣市相對於平均的差異（而非用 0 作為分界）；四色分別代表落在哪個象限，下方清單列出各象限包含的縣市。<strong>此圖僅呈現描述性關聯，不代表因果關係</strong>，事故改善或惡化通常是執法強度、道路品質、車流量、人口結構、經濟活動等多重因素共同影響的結果。</p>
@@ -397,6 +398,7 @@
             起始年：<select id="improveFinesStartYear"></select>
             結束年：<select id="improveFinesEndYear"></select>
             <button class="btn" data-export-chart="improveFinesScatterChart">⭳ PNG</button>
+            <button class="btn" id="improveFinesExportCsv">⭳ 匯出 CSV</button>
           </div>
           <div class="chart-wrap tall"><canvas id="improveFinesScatterChart"></canvas></div>
           <p class="hint">X 軸為該縣市「道路交通違規罰鍰收入」變化%（正值＝增加，負值＝減少）；Y 軸為所選事故指標的改善%。罰鍰收入資料僅有 111–114 年（西元 2022–2025）共 4 個年度可選。圖上兩條虛線為<strong>目前顯示縣市在 X、Y 軸的平均值</strong>，切成四個象限以凸顯縣市間的相對差異；四色對應各象限，下方清單列出各象限的縣市。同樣<strong>僅為描述性對照，不代表因果關係</strong>：罰鍰收入變化可能反映執法強度、車流量、違規態樣結構變化等，不宜直接解讀為「罰得越多治安越差」或「罰得越少越安全」。</p>

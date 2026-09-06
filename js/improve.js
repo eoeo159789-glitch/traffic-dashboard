@@ -26,6 +26,10 @@ const Improve = (() => {
   let enfState = { metric: 'a1Deaths', startYear: null, endYear: null };
   let finesState = { metric: 'a1Deaths', startYear: null, endYear: null };
 
+  // 記錄最近一次渲染的象限圖資料，供「匯出 CSV」使用（避免重複計算、且能反映畫面目前實際顯示的內容）
+  let lastEnfScatter = null;
+  let lastFinesScatter = null;
+
   // ---------------- 資料存取 ----------------
 
   function a1Agg(county, year) {
@@ -224,13 +228,17 @@ const Improve = (() => {
     return 3;
   }
 
-  function renderQuadrantLegend(elId, groups, xLabel, yLabel) {
-    const descs = [
+  function quadrantDescs(xLabel, yLabel) {
+    return [
       `${xLabel}高於平均、${yLabel}高於平均`,
       `${xLabel}低於平均、${yLabel}高於平均`,
       `${xLabel}低於平均、${yLabel}低於平均`,
       `${xLabel}高於平均、${yLabel}低於平均`,
     ];
+  }
+
+  function renderQuadrantLegend(elId, groups, xLabel, yLabel) {
+    const descs = quadrantDescs(xLabel, yLabel);
     const html = [0, 1, 2, 3].map(q => {
       const names = groups[q] || [];
       return `
@@ -268,6 +276,7 @@ const Improve = (() => {
     });
     Charts.renderImproveScatter('improveEnfScatterChart', taggedPoints, xLabel, yLabel, meanX, meanY);
     renderQuadrantLegend('improveEnfQuadLegend', groups, xLabel, yLabel);
+    lastEnfScatter = { points: taggedPoints, meanX, meanY, xLabel, yLabel, def, startYear: enfState.startYear, endYear: enfState.endYear };
   }
 
   function renderFinesScatterCard() {
@@ -294,7 +303,37 @@ const Improve = (() => {
     });
     Charts.renderImproveScatter('improveFinesScatterChart', taggedPoints, xLabel, yLabel, meanX, meanY);
     renderQuadrantLegend('improveFinesQuadLegend', groups, xLabel, yLabel);
+    lastFinesScatter = { points: taggedPoints, meanX, meanY, xLabel, yLabel, def, startYear: finesState.startYear, endYear: finesState.endYear };
   }
+
+  // ---------------- 象限圖 CSV 匯出 ----------------
+
+  function exportScatterCsv(scatterData, filenamePrefix) {
+    if (!scatterData || scatterData.points.length === 0) { alert('目前條件下沒有可匯出的資料'); return; }
+    const { points, meanX, meanY, xLabel, yLabel, def, startYear, endYear } = scatterData;
+    const descs = quadrantDescs(xLabel, yLabel);
+    const cols = [
+      { key: 'label', label: '縣市' },
+      { key: 'xText', label: `${xLabel}%` },
+      { key: 'yText', label: `${yLabel}%` },
+      { key: 'quadrant', label: '所在象限（分界為下方兩欄平均值）' },
+      { key: 'meanXText', label: `${xLabel}平均%（象限分界）` },
+      { key: 'meanYText', label: `${yLabel}平均%（象限分界）` },
+    ];
+    const rows = points.map(p => ({
+      label: p.label,
+      xText: p.x.toFixed(1),
+      yText: p.y.toFixed(1),
+      quadrant: descs[p.q],
+      meanXText: meanX.toFixed(1),
+      meanYText: meanY.toFixed(1),
+    }));
+    const csv = Util.toCsv(rows, cols);
+    Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${filenamePrefix}_${def.label}_${startYear}-${endYear}_${Date.now()}.csv`);
+  }
+
+  function exportEnfScatterCsv() { exportScatterCsv(lastEnfScatter, '改善趨勢_舉發變化對照'); }
+  function exportFinesScatterCsv() { exportScatterCsv(lastFinesScatter, '改善趨勢_罰鍰變化對照'); }
 
   // ---------------- 控制項綁定 ----------------
 
@@ -319,6 +358,7 @@ const Improve = (() => {
     enfMetricSel.addEventListener('change', () => { enfState.metric = enfMetricSel.value; setupCompareYearSelects('improveEnf', enfState, enfYears); render(); });
     document.getElementById('improveEnfStartYear').addEventListener('change', e => { enfState.startYear = Number(e.target.value); render(); });
     document.getElementById('improveEnfEndYear').addEventListener('change', e => { enfState.endYear = Number(e.target.value); render(); });
+    document.getElementById('improveEnfExportCsv').addEventListener('click', exportEnfScatterCsv);
 
     const finesMetricSel = document.getElementById('improveFinesMetric');
     finesMetricSel.innerHTML = metricOptionsHtml();
@@ -327,6 +367,7 @@ const Improve = (() => {
     finesMetricSel.addEventListener('change', () => { finesState.metric = finesMetricSel.value; setupCompareYearSelects('improveFines', finesState, finesYearsList); render(); });
     document.getElementById('improveFinesStartYear').addEventListener('change', e => { finesState.startYear = Number(e.target.value); render(); });
     document.getElementById('improveFinesEndYear').addEventListener('change', e => { finesState.endYear = Number(e.target.value); render(); });
+    document.getElementById('improveFinesExportCsv').addEventListener('click', exportFinesScatterCsv);
   }
 
   function render() {
