@@ -189,6 +189,7 @@
     switch (currentTab) {
       case 'overview': renderOverview(accidents); break;
       case 'map': renderMapTab(accidents); break;
+      case 'hotspot': Hotspot.render(); break;
       case 'explore': renderExplore(accidents); break;
       case 'enforcement': renderEnforcementTab(accidents); break;
       case 'population': renderPopulationTab(accidents); break;
@@ -276,6 +277,72 @@
     document.getElementById('popYearSelect').addEventListener('change', renderCurrentTab);
   }
 
+  // ---------------- 地圖導航：縣市/鄉鎮跳轉、座標定位、自訂座標環域 ----------------
+
+  function setupMapNav() {
+    const jump = State.geoJump();
+    const countySel = document.getElementById('navCountySelect');
+    const townshipSel = document.getElementById('navTownshipSelect');
+    countySel.innerHTML = jump.counties.map(c => `<option value="${c.county}">${c.county}</option>`).join('');
+
+    function refreshTownships() {
+      const county = countySel.value;
+      const list = jump.townships.filter(t => t.county === county);
+      townshipSel.innerHTML = '<option value="">（全縣市）</option>' + list.map(t => `<option value="${t.township}">${t.township}</option>`).join('');
+    }
+    refreshTownships();
+    countySel.addEventListener('change', refreshTownships);
+
+    document.getElementById('navGoBtn').addEventListener('click', () => {
+      const county = countySel.value, township = townshipSel.value;
+      if (township) {
+        const t = jump.townships.find(x => x.county === county && x.township === township);
+        if (t) MapView.jumpTo(t.lat, t.lng, 14);
+      } else {
+        const c = jump.counties.find(x => x.county === county);
+        if (c) MapView.jumpTo(c.lat, c.lng, 11);
+      }
+      if (document.querySelector('.tab-btn[data-tab="map"]') && currentTab !== 'map') {
+        document.querySelector('.tab-btn[data-tab="map"]').click();
+      }
+    });
+
+    const latInput = document.getElementById('navLat');
+    const lngInput = document.getElementById('navLng');
+    const radiusInput = document.getElementById('customBufferRadius');
+    const bufferRow = document.getElementById('customBufferRow');
+    const resultEl = document.getElementById('customBufferResult');
+
+    function updateCustomStats() {
+      const lat = Number(latInput.value), lng = Number(lngInput.value), radius = Number(radiusInput.value) || 200;
+      if (!isFinite(lat) || !isFinite(lng)) return;
+      const s = State.customBufferStats(lat, lng, radius);
+      resultEl.textContent = `半徑 ${radius}m 內：A1 ${Util.fmtNum(s.a1Count)} 件（死亡 ${s.a1Deaths}／受傷 ${s.a1Injuries}）／A2 約 ${Util.fmtNum(s.a2Count)} 件（受傷約 ${Util.fmtNum(s.a2Injuries)}，1公里網格估算）`;
+      MapView.updateCustomRadius(radius);
+    }
+
+    document.getElementById('navLocateBtn').addEventListener('click', () => {
+      const lat = Number(latInput.value), lng = Number(lngInput.value);
+      if (!isFinite(lat) || !isFinite(lng) || latInput.value === '' || lngInput.value === '') {
+        alert('請輸入有效的緯度與經度數值');
+        return;
+      }
+      const radius = Number(radiusInput.value) || 200;
+      MapView.setCustomPoint(lat, lng, radius);
+      bufferRow.hidden = false;
+      updateCustomStats();
+      if (document.querySelector('.tab-btn[data-tab="map"]') && currentTab !== 'map') {
+        document.querySelector('.tab-btn[data-tab="map"]').click();
+      }
+    });
+    document.getElementById('navClearBtn').addEventListener('click', () => {
+      MapView.clearCustomPoint();
+      bufferRow.hidden = true;
+      latInput.value = ''; lngInput.value = '';
+    });
+    radiusInput.addEventListener('input', updateCustomStats);
+  }
+
   // ---------------- 按鈕事件 ----------------
 
   function setupButtons() {
@@ -336,8 +403,10 @@
     setupSelects();
     setupButtons();
     setupSidebarToggle();
+    setupMapNav();
     renderA2DownloadList();
     MapView.init();
+    Hotspot.init();
 
     State.onChange(() => { tablePage = 1; renderCurrentTab(); });
     renderCurrentTab();

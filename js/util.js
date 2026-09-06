@@ -72,6 +72,15 @@ const Util = (() => {
     return mb >= 1 ? mb.toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB';
   }
 
+  // 兩點距離（公尺），等距圓柱投影近似（跟 build_data.py 的 dist_m() 邏輯一致，短距離已足夠精準）
+  function distMeters(lat1, lng1, lat2, lng2) {
+    const rad = Math.PI / 180;
+    const latAvg = (lat1 + lat2) / 2 * rad;
+    const dx = (lng2 - lng1) * rad * Math.cos(latAvg) * 6371000;
+    const dy = (lat2 - lat1) * rad * 6371000;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -102,6 +111,6 @@ const Util = (() => {
 
   return {
     PALETTE, STATUS, seriesColor, isDark, chartTextColor, chartGridColor,
-    groupBy, countBy, sumBy, sortMapDesc, fmtNum, fmtPct, fmtBytes, downloadBlob, toCsv, seqColor,
+    groupBy, countBy, sumBy, sortMapDesc, fmtNum, fmtPct, fmtBytes, distMeters, downloadBlob, toCsv, seqColor,
   };
 })();

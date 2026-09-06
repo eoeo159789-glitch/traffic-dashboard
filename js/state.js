@@ -129,10 +129,39 @@ const State = (() => {
     return PARTIES.filter(p => ids.has(p.aid));
   }
 
+  // ---- 熱點路口（1000易肇事路口 / 799人行安全補助點位）與環域分析 ----
+  // 這兩份點位資料與環域統計不受側邊欄篩選影響（獨立資料集，有自己的分頁篩選）
+  function hotspotPoints() { return window.POINTS_HOTSPOT1000 || []; }
+  function safety799Points() { return window.POINTS_SAFETY799 || []; }
+  function pointsByDataset(key) { return key === 'safety799' ? safety799Points() : hotspotPoints(); }
+  function bufferA1For(pointId) { return (window.POINT_BUFFER_A1 || {})[pointId] || null; }
+  function bufferA2For(pointId) { return (window.POINT_BUFFER_A2 || {})[pointId] || null; }
+  function geoJump() { return window.GEO_JUMP || { counties: [], townships: [] }; }
+
+  // 自訂座標的即時環域分析：A1 用逐筆精確計算（資料量小），A2 用 1 公里網格資料概略估算
+  function customBufferStats(lat, lng, radiusM) {
+    let a1Count = 0, a1Deaths = 0, a1Injuries = 0;
+    ACCIDENTS.forEach(a => {
+      if (a.lat == null || a.lng == null) return;
+      if (Util.distMeters(lat, lng, a.lat, a.lng) <= radiusM) {
+        a1Count++; a1Deaths += a.deaths; a1Injuries += a.injuries;
+      }
+    });
+    let a2Count = 0, a2Injuries = 0;
+    (window.A2_GEO || []).forEach(g => {
+      // 網格中心到查詢點距離扣除半個網格對角線寬容度（約 1.1 公里網格 -> 容許 800 公尺），避免邊界網格被漏算
+      if (Util.distMeters(lat, lng, g.lat, g.lng) <= radiusM + 800) {
+        a2Count += g.count; a2Injuries += g.injuries;
+      }
+    });
+    return { a1Count, a1Deaths, a1Injuries, a2Count, a2Injuries };
+  }
+
   return {
     DIMENSIONS, filters, uniqueValues, matches, filtered, invalidate,
     toggleInSet, setAll, resetAll, onChange, partiesFor,
     a2CrosstabFiltered, a2ByCountyFiltered, a2ByMonthFiltered, a2ByHourFiltered,
     a2AccTypeMinorFiltered, a2CauseMinorFiltered, a2GeoFiltered,
+    hotspotPoints, safety799Points, pointsByDataset, bufferA1For, bufferA2For, geoJump, customBufferStats,
   };
 })();

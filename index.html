@@ -71,6 +71,7 @@
     <div class="tabbar">
       <button class="tab-btn active" data-tab="overview">總覽</button>
       <button class="tab-btn" data-tab="map">地圖</button>
+      <button class="tab-btn" data-tab="hotspot">熱點環域分析</button>
       <button class="tab-btn" data-tab="explore">多維探索</button>
       <button class="tab-btn" data-tab="enforcement">事故 vs 舉發執法</button>
       <button class="tab-btn" data-tab="population">事故 vs 人口/縣市</button>
@@ -135,20 +136,69 @@
     <section class="tab-panel" id="tab-map">
       <div class="card">
         <div class="card-head">
+          <h2>地圖導航與座標環域</h2>
+        </div>
+        <div class="nav-row">
+          <span class="nav-label">跳到縣市／鄉鎮：</span>
+          <select id="navCountySelect"></select>
+          <select id="navTownshipSelect"><option value="">（全縣市）</option></select>
+          <button class="btn" id="navGoBtn">➤ 前往</button>
+        </div>
+        <div class="nav-row">
+          <span class="nav-label">座標定位：</span>
+          緯度 <input type="number" id="navLat" step="0.000001" placeholder="例如 25.0330" class="coord-input">
+          經度 <input type="number" id="navLng" step="0.000001" placeholder="例如 121.5654" class="coord-input">
+          <button class="btn" id="navLocateBtn">📍 定位</button>
+          <button class="btn" id="navClearBtn">✕ 清除定位</button>
+        </div>
+        <div class="nav-row" id="customBufferRow" hidden>
+          半徑 <input type="number" id="customBufferRadius" value="200" min="10" max="5000" step="10"> 公尺
+          <span class="hint" id="customBufferResult"></span>
+        </div>
+        <p class="hint">選擇縣市／鄉鎮或輸入座標可將地圖跳轉至該位置；定位後會在地圖上顯示綠色標記，並即時計算該座標半徑內的 A1／A2 事故概況（A2 因僅有約 1 公里網格資料，為概略估算）。鄉鎮清單僅涵蓋下方兩份路口名單中出現過的鄉鎮（涵蓋全臺主要易肇事區域，非完整 368 鄉鎮清單）。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
           <h2>事故地點分布地圖</h2>
           <div class="card-tools map-layer-tools">
             <label class="hint"><input type="checkbox" id="showA1Toggle" checked> 顯示 A1 死亡事故</label>
             <label class="hint"><input type="checkbox" id="a1HeatToggle"> A1 以熱力圖顯示</label>
             <label class="hint"><input type="checkbox" id="showA2Toggle"> 顯示 A2 受傷事故熱區</label>
+            <label class="hint"><input type="checkbox" id="showHotspotToggle"> 顯示 1000 易肇事路口</label>
+            <label class="hint"><input type="checkbox" id="showSafety799Toggle"> 顯示 799 人行安全補助點位</label>
             <button class="btn" id="mapExportBtn">⭳ 匯出地圖 PNG</button>
           </div>
         </div>
-        <p class="hint">A1（死亡）與 A2（受傷）資料可分開或同時顯示：勾選上方選項自由組合。A2 資料量龐大，地圖上以約 1 公里網格彙整之熱區密度呈現，不逐點標示；A1 可切換為逐點標記或熱力圖。</p>
+        <p class="hint">A1（死亡）與 A2（受傷）資料可分開或同時顯示：勾選上方選項自由組合。A2 資料量龐大，地圖上以約 1 公里網格彙整之熱區密度呈現，不逐點標示；A1 可切換為逐點標記或熱力圖。1000 易肇事路口／799 人行安全補助點位為固定點位圖層，點擊可查看該點位半徑內的 A1／A2 統計（預設半徑 200 公尺，完整多半徑分析請至「熱點環域分析」分頁）。</p>
         <div class="map-wrap">
           <div id="map"></div>
           <div class="map-legend" id="mapLegend"></div>
         </div>
         <p class="hint" id="mapNote">點位僅顯示有經緯度座標之事故（依目前左側篩選條件）。標記顏色：紅=有死亡、橘=僅受傷。</p>
+      </div>
+    </section>
+
+    <!-- ============ 熱點環域分析 ============ -->
+    <section class="tab-panel" id="tab-hotspot">
+      <div class="card">
+        <div class="card-head">
+          <h2>易肇事路口／人行安全補助點位 環域分析</h2>
+          <div class="card-tools">
+            資料集：<select id="hsDatasetSelect">
+              <option value="hotspot1000">全國1000易肇事路口</option>
+              <option value="safety799">永續提升人行安全799處補助地點</option>
+            </select>
+            半徑：<select id="hsRadiusSelect"></select>
+            縣市：<select id="hsCountySelect"><option value="">全部縣市</option></select>
+            <input type="text" id="hsSearchInput" placeholder="搜尋路口名稱／位置關鍵字" class="search-input">
+            <button class="btn" id="hsExportCsv">⭳ 匯出清單 CSV（含環域統計）</button>
+          </div>
+        </div>
+        <p class="hint">選擇資料集與半徑後，下表會即時計算每個點位在該半徑範圍內的 A1（死亡）與 A2（受傷）事故統計（A2 為建置時預先計算之精確逐筆比對結果，非地圖上的網格估算）。點欄位標題可排序，匯出 CSV 會依目前篩選／排序後的清單匯出。</p>
+        <div class="hint">共 <b id="hsFilteredCount">0</b> 處符合條件</div>
+        <div class="table-scroll"><table class="data-table" id="hsTable"></table></div>
+        <div class="pagination" id="hsPagination"></div>
       </div>
     </section>
 
@@ -305,6 +355,11 @@
 <script src="data/enforcement.data.js"></script>
 <script src="data/indicators.data.js"></script>
 <script src="data/a2_export_manifest.data.js"></script>
+<script src="data/points_hotspot1000.data.js"></script>
+<script src="data/points_safety799.data.js"></script>
+<script src="data/geo_jump.data.js"></script>
+<script src="data/point_buffer_a1.data.js"></script>
+<script src="data/point_buffer_a2.data.js"></script>
 <script src="data/a2_by_county.data.js"></script>
 <script src="data/a2_by_month.data.js"></script>
 <script src="data/a2_by_hour.data.js"></script>
@@ -318,6 +373,7 @@
 <script src="js/state.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/map.js"></script>
+<script src="js/hotspot.js"></script>
 <script src="js/export.js"></script>
 <script src="js/app.js"></script>
 </body>

@@ -27,6 +27,7 @@ import csv
 import json
 import re
 import glob
+import math
 import os
 import sys
 from collections import defaultdict
@@ -355,6 +356,175 @@ def load_indicators():
 
 
 # ---------------------------------------------------------------------------
+# 熱點路口資料（1000 易肇事路口 + 799 人行安全計畫補助地點）與環域分析
+# ---------------------------------------------------------------------------
+
+POINTS_DIR = os.path.join(RAW, "points")
+BUFFER_RADII_M = [50, 100, 200, 300, 500, 1000]  # 環域分析半徑（公尺）選項
+POINT_GRID_DEG = 0.01  # 約 1.1 公里網格，用於環域分析的空間索引（先篩候選點再算精確距離）
+
+
+def _num(v):
+    try:
+        if v is None or v == "":
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def load_hotspot1000():
+    path = os.path.join(POINTS_DIR, "全國1000易肇事路口清單彙整_已完成地理編碼.xlsx")
+    if not os.path.exists(path):
+        return []
+    rows = load_workbook_rows(path, 0)
+    header, data = rows[0], rows[1:]
+    idx = {h: i for i, h in enumerate(header)}
+
+    def g(r, col):
+        i = idx.get(col)
+        return r[i] if i is not None and i < len(r) else None
+
+    out = []
+    for r in data:
+        lat, lng = _num(g(r, "緯度 Latitude")), _num(g(r, "經度 Longitude"))
+        if lat is None or lng is None:
+            continue
+        num = g(r, "編號")
+        rank = g(r, "原始排行")
+        out.append({
+            "id": f"h{int(num) if num is not None else len(out)+1}",
+            "county": normalize_county(g(r, "縣市")) or g(r, "縣市"),
+            "township": g(r, "鄉鎮市區"),
+            "name": g(r, "路口名稱"),
+            "count": int(g(r, "件數") or 0),
+            "deaths": int(g(r, "死亡人數") or 0),
+            "injuries": int(g(r, "受傷人數") or 0),
+            "rank": int(rank) if rank not in (None, "") else None,
+            "category": g(r, "備註（類別）"),
+            "lat": lat, "lng": lng,
+        })
+    return out
+
+
+def load_safety799():
+    path = os.path.join(POINTS_DIR, "永續提升人行安全計畫799處補助地點_路口清單_已完成地理編碼.xlsx")
+    if not os.path.exists(path):
+        return []
+    rows = load_workbook_rows(path, 0)
+    header, data = rows[0], rows[1:]
+    idx = {h: i for i, h in enumerate(header)}
+
+    def g(r, col):
+        i = idx.get(col)
+        return r[i] if i is not None and i < len(r) else None
+
+    out = []
+    for r in data:
+        lat, lng = _num(g(r, "緯度 Latitude")), _num(g(r, "經度 Longitude"))
+        if lat is None or lng is None:
+            continue
+        seq = g(r, "序號")
+        out.append({
+            "id": f"s{int(seq) if seq is not None else len(out)+1}",
+            "source": g(r, "資料來源"),
+            "county": normalize_county(g(r, "縣市")) or g(r, "縣市"),
+            "township": g(r, "鄉鎮市區"),
+            "position": g(r, "路口位置(原始)"),
+            "code": g(r, "原始項次/代號"),
+            "address": g(r, "完整地址"),
+            "lat": lat, "lng": lng,
+        })
+    return out
+
+
+def build_point_grid(points):
+    """把點位依經緯度網格分桶，供環域分析快速篩選候選點（避免對每一筆事故都跟全部點位比對）。"""
+    grid = defaultdict(list)
+    for i, p in enumerate(points):
+        cell = (round(p["lat"] / POINT_GRID_DEG), round(p["lng"] / POINT_GRID_DEG))
+        grid[cell].append(i)
+    return grid
+
+
+def dist_m(lat1, lng1, lat2, lng2):
+    """兩點距離（公尺），採等距圓柱投影近似（短距離已足夠精準，且比 haversine 快很多）。"""
+    lat_avg = math.radians((lat1 + lat2) / 2)
+    dx = math.radians(lng2 - lng1) * math.cos(lat_avg) * 6371000
+    dy = math.radians(lat2 - lat1) * 6371000
+    return math.sqrt(dx * dx + dy * dy)
+
+
+def nearby_point_indices(grid, lat, lng):
+    cx, cy = round(lat / POINT_GRID_DEG), round(lng / POINT_GRID_DEG)
+    out = []
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            cell = grid.get((cx + dx, cy + dy))
+            if cell:
+                out.extend(cell)
+    return out
+
+
+def compute_point_buffers_a1(points, grid, accidents):
+    """回傳 {point_id: {半徑: [件數, 死亡人數, 受傷人數]}}，以 A1 逐筆資料精確計算。"""
+    buf = {p["id"]: {r: [0, 0, 0] for r in BUFFER_RADII_M} for p in points}
+    max_r = BUFFER_RADII_M[-1]
+    for a in accidents:
+        lat, lng = a.get("lat"), a.get("lng")
+        if lat is None or lng is None or abs(lat) < 1 or abs(lng) < 1:
+            continue
+        cand = nearby_point_indices(grid, lat, lng)
+        if not cand:
+            continue
+        for i in cand:
+            p = points[i]
+            d = dist_m(lat, lng, p["lat"], p["lng"])
+            if d > max_r:
+                continue
+            e = buf[p["id"]]
+            deaths, injuries = a.get("deaths", 0) or 0, a.get("injuries", 0) or 0
+            for r in BUFFER_RADII_M:
+                if d <= r:
+                    b = e[r]
+                    b[0] += 1
+                    b[1] += deaths
+                    b[2] += injuries
+    return buf
+
+
+def compute_geo_jump(all_points):
+    """依熱點/補助點位資料，算出各縣市、各鄉鎮市區的概略中心座標，供地圖「跳到此區域」使用。"""
+    county_acc = defaultdict(lambda: [0.0, 0.0, 0])
+    township_acc = defaultdict(lambda: [0.0, 0.0, 0])
+    for p in all_points:
+        c = p.get("county")
+        if not c:
+            continue
+        e = county_acc[c]; e[0] += p["lat"]; e[1] += p["lng"]; e[2] += 1
+        t = p.get("township")
+        if t:
+            e2 = township_acc[(c, t)]; e2[0] += p["lat"]; e2[1] += p["lng"]; e2[2] += 1
+
+    counties = [{"county": c, "lat": v[0] / v[2], "lng": v[1] / v[2]} for c, v in county_acc.items()]
+    have = {c["county"] for c in counties}
+    # 1000/799 兩份名單皆未涵蓋外島兩縣，補上概略縣治座標，讓地圖跳轉功能涵蓋全 22 縣市
+    fallback = {"金門縣": (24.4457, 118.3768), "連江縣": (26.1608, 119.9500)}
+    for name, (lat, lng) in fallback.items():
+        if name not in have:
+            counties.append({"county": name, "lat": lat, "lng": lng})
+
+    townships = [
+        {"county": c, "township": t, "lat": v[0] / v[2], "lng": v[1] / v[2]}
+        for (c, t), v in township_acc.items()
+    ]
+    return {
+        "counties": sorted(counties, key=lambda x: x["county"]),
+        "townships": sorted(townships, key=lambda x: (x["county"], x["township"])),
+    }
+
+
+# ---------------------------------------------------------------------------
 # A2 事故資料（僅受傷、無死亡；資料量遠大於 A1，採「串流彙總」而非逐筆保留）
 # ---------------------------------------------------------------------------
 
@@ -366,7 +536,7 @@ A2_CROSSTAB_DIMS = [
 FULL_EXPORT_DIR = os.path.join(BASE, "full_data_export")
 
 
-def load_a2():
+def load_a2(points=None, grid=None):
     """
     串流讀取 data_raw/a2/<年度>/*.csv（每年 10-15 個分割檔，單年可能高達 80-90 萬列）。
     不保留逐筆記錄，只累積：
@@ -375,6 +545,8 @@ def load_a2():
       - byCounty: 依年度+縣市 分組（總計，供 KPI／排行用）
       - accTypeMinor / causeMinor: 依年度+縣市+子類別 分組（供排行圖表用）
       - geo: 依年度+縣市+經緯度網格 分組（供地圖熱力圖用）
+      - bufferA2: 若有帶入 points/grid（熱點路口環域分析用），同一次掃描順便累積
+        各點位在 BUFFER_RADII_M 各半徑內的 A2 件數/受傷人數（避免整份 A2 原始資料被重複掃描）
     同時把每個年度的原始明細清理後合併成一個檔案，壓縮輸出到 full_data_export/，
     供使用者匯出原始逐筆資料做進一步分析（不會被網站載入，僅提供下載）。
     """
@@ -390,6 +562,10 @@ def load_a2():
     acc_type_minor = defaultdict(lambda: [0, 0])  # key: (year, county, accTypeMinor)
     cause_minor = defaultdict(lambda: [0, 0])     # key: (year, county, causeMinor)
     geo = defaultdict(lambda: [0, 0])        # key: (year, county, latBin, lngBin)
+
+    do_buffer = bool(points and grid is not None)
+    buf_a2 = {p["id"]: {r: [0, 0] for r in BUFFER_RADII_M} for p in points} if do_buffer else {}
+    max_r = BUFFER_RADII_M[-1] if do_buffer else 0
 
     os.makedirs(FULL_EXPORT_DIR, exist_ok=True)
     total_rows = 0
@@ -467,12 +643,27 @@ def load_a2():
                     e = cause_minor[(year, county, causeMinorV)]; e[0] += 1; e[1] += injuries
 
                     try:
-                        lat = round(float(g(row, "緯度") or 0), A2_GEO_ROUND)
-                        lng = round(float(g(row, "經度") or 0), A2_GEO_ROUND)
-                        if abs(lat) > 1 and abs(lng) > 1:
-                            e = geo[(year, county, lat, lng)]; e[0] += 1; e[1] += injuries
+                        raw_lat = float(g(row, "緯度") or 0)
+                        raw_lng = float(g(row, "經度") or 0)
                     except ValueError:
-                        pass
+                        raw_lat = raw_lng = 0.0
+                    if abs(raw_lat) > 1 and abs(raw_lng) > 1:
+                        gy, gx = round(raw_lat, A2_GEO_ROUND), round(raw_lng, A2_GEO_ROUND)
+                        e = geo[(year, county, gy, gx)]; e[0] += 1; e[1] += injuries
+
+                        if do_buffer:
+                            cand = nearby_point_indices(grid, raw_lat, raw_lng)
+                            for i in cand:
+                                p = points[i]
+                                d = dist_m(raw_lat, raw_lng, p["lat"], p["lng"])
+                                if d > max_r:
+                                    continue
+                                be = buf_a2[p["id"]]
+                                for r in BUFFER_RADII_M:
+                                    if d <= r:
+                                        b = be[r]
+                                        b[0] += 1
+                                        b[1] += injuries
 
         merged_f.close()
         # 壓縮輸出，刪除未壓縮版本以節省空間
@@ -509,6 +700,7 @@ def load_a2():
         "causeMinor": dictify(cause_minor, ["year", "county", "causeMinor"]),
         "geo": dictify(geo, ["year", "county", "lat", "lng"]),
         "exportManifest": export_manifest,
+        "bufferA2": buf_a2,
     }
     print(f"  [A2] 總計掃描 {total_rows:,} 列原始資料，{total_accidents:,} 件事故")
     for k, v in result.items():
@@ -538,8 +730,26 @@ def main():
     enforcement = load_enforcement()
     print("=== 建置縣市統計指標資料 ===")
     indicators = load_indicators()
-    print("=== 建置 A2（受傷）事故彙總資料 ===")
-    a2 = load_a2()
+
+    print("=== 建置熱點路口資料（1000易肇事路口 + 799人行安全計畫補助地點）===")
+    hotspot1000 = load_hotspot1000()
+    safety799 = load_safety799()
+    all_points = [
+        {"id": p["id"], "lat": p["lat"], "lng": p["lng"], "county": p["county"], "township": p["township"]}
+        for p in hotspot1000 + safety799
+    ]
+    print(f"  熱點路口共 {len(hotspot1000):,} 處，人行安全補助地點共 {len(safety799):,} 處")
+
+    point_grid = build_point_grid(all_points) if all_points else None
+    geo_jump = compute_geo_jump(all_points) if all_points else {"counties": [], "townships": []}
+
+    buffer_a1 = {}
+    if all_points:
+        print("=== 計算 A1 環域分析（各熱點路口半徑內的 A1 事故統計）===")
+        buffer_a1 = compute_point_buffers_a1(all_points, point_grid, accidents)
+
+    print("=== 建置 A2（受傷）事故彙總資料（並同步計算 A2 環域分析）===")
+    a2 = load_a2(all_points if all_points else None, point_grid)
 
     years = sorted(set(a["year"] for a in accidents))
     meta = {
@@ -550,6 +760,9 @@ def main():
         "indicatorNames": sorted(set(i["indicator"] for i in indicators)),
         "a2CrosstabDims": A2_CROSSTAB_DIMS,
         "a2Years": sorted(set(r["year"] for r in a2["byCounty"])) if a2 else [],
+        "bufferRadii": BUFFER_RADII_M,
+        "hotspot1000Count": len(hotspot1000),
+        "safety799Count": len(safety799),
         "generatedAt": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -559,6 +772,10 @@ def main():
     write_js("ENFORCEMENT", enforcement, "enforcement.data.js")
     write_js("INDICATORS", indicators, "indicators.data.js")
     write_js("META", meta, "meta.data.js")
+    write_js("POINTS_HOTSPOT1000", hotspot1000, "points_hotspot1000.data.js")
+    write_js("POINTS_SAFETY799", safety799, "points_safety799.data.js")
+    write_js("GEO_JUMP", geo_jump, "geo_jump.data.js")
+    write_js("POINT_BUFFER_A1", buffer_a1, "point_buffer_a1.data.js")
     if a2:
         write_js("A2_EXPORT_MANIFEST", a2["exportManifest"], "a2_export_manifest.data.js")
         write_js("A2_CROSSTAB", a2["crosstab"], "a2_crosstab.data.js")
@@ -568,6 +785,7 @@ def main():
         write_js("A2_ACC_TYPE_MINOR", a2["accTypeMinor"], "a2_acc_type_minor.data.js")
         write_js("A2_CAUSE_MINOR", a2["causeMinor"], "a2_cause_minor.data.js")
         write_js("A2_GEO", a2["geo"], "a2_geo.data.js")
+        write_js("POINT_BUFFER_A2", a2["bufferA2"], "point_buffer_a2.data.js")
     print("完成！")
 
 
