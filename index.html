@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>臺灣交通事故資料整合分析平台</title>
+<link rel="stylesheet" href="css/style.css">
+<!-- Leaflet 地圖 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="app-header">
+    <h1>🚦 臺灣交通事故資料整合分析平台</h1>
+    <span class="subtitle" id="dataRangeLabel"></span>
+    <div class="spacer"></div>
+    <button class="theme-toggle" id="themeToggle">🌓 深色/淺色</button>
+  </header>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="filter-group">
+      <h3>年度 <button class="mini-btn" data-action="reset-years">全選</button></h3>
+      <div class="chip-list" id="yearChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <h3>縣市 <button class="mini-btn" data-action="toggle-counties">全選/清空</button></h3>
+      <div class="chip-list" id="countyChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <h3>天候</h3>
+      <div class="chip-list" id="weatherChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <h3>光線</h3>
+      <div class="chip-list" id="lightChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <h3>道路類別</h3>
+      <div class="chip-list" id="roadClassChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <h3>事故類型</h3>
+      <div class="chip-list" id="accTypeChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <h3>肇因（大類別）</h3>
+      <div class="chip-list" id="causeChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <button class="reset-btn" id="resetFiltersBtn">↺ 重設所有篩選</button>
+    </div>
+
+    <div class="filter-group hint">
+      共 <b id="filteredCount">0</b> / <span id="totalCount">0</span> 件事故符合篩選
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="tabbar">
+      <button class="tab-btn active" data-tab="overview">總覽</button>
+      <button class="tab-btn" data-tab="map">地圖</button>
+      <button class="tab-btn" data-tab="explore">多維探索</button>
+      <button class="tab-btn" data-tab="enforcement">事故 vs 舉發執法</button>
+      <button class="tab-btn" data-tab="population">事故 vs 人口/縣市</button>
+      <button class="tab-btn" data-tab="table">資料表與匯出</button>
+    </div>
+
+    <!-- ============ 總覽 ============ -->
+    <section class="tab-panel active" id="tab-overview">
+      <div class="kpi-row" id="kpiRow"></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h2>歷年事故 / 死亡 / 受傷趨勢</h2>
+            <div class="card-tools"><button class="btn" data-export-chart="trendChart">⭳ PNG</button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>各縣市事故件數排行</h2>
+            <div class="card-tools"><button class="btn" data-export-chart="countyRankChart">⭳ PNG</button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="countyRankChart"></canvas></div>
+        </div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-head"><h2>天候分布</h2><div class="card-tools"><button class="btn" data-export-chart="weatherChart">⭳</button></div></div>
+          <div class="chart-wrap short"><canvas id="weatherChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>時段分布（小時）</h2><div class="card-tools"><button class="btn" data-export-chart="hourChart">⭳</button></div></div>
+          <div class="chart-wrap short"><canvas id="hourChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>事故類型（大類別）</h2><div class="card-tools"><button class="btn" data-export-chart="accTypeChart">⭳</button></div></div>
+          <div class="chart-wrap short"><canvas id="accTypeChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 地圖 ============ -->
+    <section class="tab-panel" id="tab-map">
+      <div class="card">
+        <div class="card-head">
+          <h2>事故地點分布地圖</h2>
+          <div class="card-tools">
+            <label class="hint"><input type="checkbox" id="mapHeatToggle"> 熱力圖模式</label>
+            <button class="btn" id="mapExportBtn">⭳ 匯出地圖 PNG</button>
+          </div>
+        </div>
+        <div class="map-wrap">
+          <div id="map"></div>
+          <div class="map-legend" id="mapLegend"></div>
+        </div>
+        <p class="hint">點位僅顯示有經緯度座標之事故（依目前左側篩選條件）。標記顏色：紅=有死亡、橘=僅受傷。</p>
+      </div>
+    </section>
+
+    <!-- ============ 多維探索 ============ -->
+    <section class="tab-panel" id="tab-explore">
+      <div class="card">
+        <div class="card-head">
+          <h2>自由交叉比對</h2>
+          <div class="card-tools">
+            列：<select id="crossRowDim"></select>
+            欄：<select id="crossColDim"></select>
+            量測：<select id="crossMetric">
+              <option value="count">事故件數</option>
+              <option value="deaths">死亡人數</option>
+              <option value="injuries">受傷人數</option>
+            </select>
+            <button class="btn" id="crossExportCsv">⭳ 匯出交叉表 CSV</button>
+          </div>
+        </div>
+        <p class="hint">選擇任意兩個維度做交叉比對，右側色階越深代表數值越高。</p>
+        <div class="table-scroll"><table class="data-table crosstab" id="crossTable"></table></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h2>單一維度分布</h2>
+            <div class="card-tools">
+              維度：<select id="singleDim"></select>
+              <button class="btn" data-export-chart="singleDimChart">⭳ PNG</button>
+            </div>
+          </div>
+          <div class="chart-wrap tall"><canvas id="singleDimChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>肇因排行（子類別）</h2>
+            <div class="card-tools"><button class="btn" data-export-chart="causeChart">⭳ PNG</button></div>
+          </div>
+          <div class="chart-wrap tall"><canvas id="causeChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 事故 vs 舉發執法 ============ -->
+    <section class="tab-panel" id="tab-enforcement">
+      <p class="hint">舉發統計資料為 108–114 年（西元 2019–2025）逐年縣市統計；事故資料為 110–114 年（西元 2021–2025），比對時僅取兩者重疊年度。</p>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h2>舉發類別 vs 事故件數（縣市散佈）</h2>
+            <div class="card-tools">
+              舉發類別：<select id="enfCategorySelect"></select>
+              <button class="btn" data-export-chart="enfScatterChart">⭳ PNG</button>
+            </div>
+          </div>
+          <div class="chart-wrap tall"><canvas id="enfScatterChart"></canvas></div>
+          <p class="hint">每點代表一個縣市（該年度），X 軸為舉發件數、Y 軸為事故件數。</p>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>歷年各類舉發件數趨勢</h2>
+            <div class="card-tools"><button class="btn" data-export-chart="enfTrendChart">⭳ PNG</button></div>
+          </div>
+          <div class="chart-wrap tall"><canvas id="enfTrendChart"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>各縣市舉發總件數 vs 事故件數 / 死亡人數（每萬件舉發對應）</h2>
+          <div class="card-tools"><button class="btn" data-export-chart="enfBarChart">⭳ PNG</button></div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="enfBarChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ============ 事故 vs 人口/縣市 ============ -->
+    <section class="tab-panel" id="tab-population">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h2>各縣市事故率（每十萬人口）</h2>
+            <div class="card-tools">
+              年度：<select id="popYearSelect"></select>
+              <button class="btn" data-export-chart="popRateChart">⭳ PNG</button>
+            </div>
+          </div>
+          <div class="chart-wrap tall"><canvas id="popRateChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>人口密度 vs 事故密度（散佈）</h2>
+            <div class="card-tools"><button class="btn" data-export-chart="densityScatterChart">⭳ PNG</button></div>
+          </div>
+          <div class="chart-wrap tall"><canvas id="densityScatterChart"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>全臺長期趨勢：事故傷害死亡率 / 人口 (1998–2025)</h2>
+          <div class="card-tools"><button class="btn" data-export-chart="longTrendChart">⭳ PNG</button></div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="longTrendChart"></canvas></div>
+        <p class="hint">此圖取用官方長期統計指標，年度範圍不受左側「年度」篩選限制（僅受縣市篩選影響，縣市多選時取加總或平均如各指標定義）。</p>
+      </div>
+    </section>
+
+    <!-- ============ 資料表與匯出 ============ -->
+    <section class="tab-panel" id="tab-table">
+      <div class="card">
+        <div class="card-head">
+          <h2>篩選後事故明細資料表</h2>
+          <div class="card-tools">
+            <button class="btn" id="exportCsvBtn">⭳ 匯出 CSV</button>
+            <button class="btn" id="exportXlsxBtn">⭳ 匯出 Excel</button>
+          </div>
+        </div>
+        <div class="table-scroll"><table class="data-table" id="dataTable"></table></div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </section>
+
+    <p class="footer-note">
+      資料來源：內政部警政署 A1 交通事故資料、警政署舉發統計、內政部縣市重要統計指標。
+      本平台為離線靜態網站，資料處理流程見 <code>scripts/build_data.py</code>，可自行更新後重新產生。
+    </p>
+  </main>
+</div>
+
+<!-- 外部函式庫 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<!-- 資料檔（由 scripts/build_data.py 產生） -->
+<script src="data/meta.data.js"></script>
+<script src="data/accidents.data.js"></script>
+<script src="data/parties.data.js"></script>
+<script src="data/enforcement.data.js"></script>
+<script src="data/indicators.data.js"></script>
+
+<!-- 應用程式邏輯 -->
+<script src="js/util.js"></script>
+<script src="js/state.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/map.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
