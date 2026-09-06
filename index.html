@@ -13,11 +13,14 @@
 <body>
 <div class="app-shell">
   <header class="app-header">
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="開啟篩選">☰</button>
     <h1>🚦 臺灣交通事故資料整合分析平台</h1>
     <span class="subtitle" id="dataRangeLabel"></span>
     <div class="spacer"></div>
     <button class="theme-toggle" id="themeToggle">🌓 深色/淺色</button>
   </header>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
   <aside class="sidebar" id="sidebar">
     <div class="filter-group">
@@ -107,6 +110,25 @@
           <div class="chart-wrap short"><canvas id="accTypeChart"></canvas></div>
         </div>
       </div>
+
+      <h2 class="section-title">A2 受傷事故（彙整統計，依側邊年度/縣市篩選）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h2>A2 受傷事故歷年趨勢</h2>
+            <div class="card-tools"><button class="btn" data-export-chart="a2TrendChart">⭳ PNG</button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="a2TrendChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>各縣市 A2 受傷事故排行</h2>
+            <div class="card-tools"><button class="btn" data-export-chart="a2CountyRankChart">⭳ PNG</button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="a2CountyRankChart"></canvas></div>
+        </div>
+      </div>
+      <p class="hint">A2 資料量龐大（約 434 萬列原始資料 / 193 萬件事故），為維持網站效能，此處僅呈現依年度、縣市（及多維探索頁的其他維度）彙整後的統計數字，不逐筆載入瀏覽器。如需逐筆資料，請至「資料表與匯出」分頁下載。</p>
     </section>
 
     <!-- ============ 地圖 ============ -->
@@ -114,16 +136,19 @@
       <div class="card">
         <div class="card-head">
           <h2>事故地點分布地圖</h2>
-          <div class="card-tools">
-            <label class="hint"><input type="checkbox" id="mapHeatToggle"> 熱力圖模式</label>
+          <div class="card-tools map-layer-tools">
+            <label class="hint"><input type="checkbox" id="showA1Toggle" checked> 顯示 A1 死亡事故</label>
+            <label class="hint"><input type="checkbox" id="a1HeatToggle"> A1 以熱力圖顯示</label>
+            <label class="hint"><input type="checkbox" id="showA2Toggle"> 顯示 A2 受傷事故熱區</label>
             <button class="btn" id="mapExportBtn">⭳ 匯出地圖 PNG</button>
           </div>
         </div>
+        <p class="hint">A1（死亡）與 A2（受傷）資料可分開或同時顯示：勾選上方選項自由組合。A2 資料量龐大，地圖上以約 1 公里網格彙整之熱區密度呈現，不逐點標示；A1 可切換為逐點標記或熱力圖。</p>
         <div class="map-wrap">
           <div id="map"></div>
           <div class="map-legend" id="mapLegend"></div>
         </div>
-        <p class="hint">點位僅顯示有經緯度座標之事故（依目前左側篩選條件）。標記顏色：紅=有死亡、橘=僅受傷。</p>
+        <p class="hint" id="mapNote">點位僅顯示有經緯度座標之事故（依目前左側篩選條件）。標記顏色：紅=有死亡、橘=僅受傷。</p>
       </div>
     </section>
 
@@ -133,6 +158,10 @@
         <div class="card-head">
           <h2>自由交叉比對</h2>
           <div class="card-tools">
+            資料來源：<select id="exploreSourceSelect">
+              <option value="a1">A1 死亡事故（逐筆）</option>
+              <option value="a2">A2 受傷事故（彙整統計）</option>
+            </select>
             列：<select id="crossRowDim"></select>
             欄：<select id="crossColDim"></select>
             量測：<select id="crossMetric">
@@ -143,7 +172,7 @@
             <button class="btn" id="crossExportCsv">⭳ 匯出交叉表 CSV</button>
           </div>
         </div>
-        <p class="hint">選擇任意兩個維度做交叉比對，右側色階越深代表數值越高。</p>
+        <p class="hint">選擇任意兩個維度做交叉比對，右側色階越深代表數值越高。切換為 A2 資料來源時，維度與量測選項會自動調整（A2 僅有彙整統計，無死亡人數欄位），並同樣套用左側側邊欄的年度／縣市／天候／光線／道路類別／事故類型／肇因篩選。</p>
         <div class="table-scroll"><table class="data-table crosstab" id="crossTable"></table></div>
       </div>
       <div class="grid-2">
@@ -242,6 +271,15 @@
         </div>
         <div class="table-scroll"><table class="data-table" id="dataTable"></table></div>
         <div class="pagination" id="pagination"></div>
+        <p class="hint">此表為 A1（死亡）事故逐筆資料，已套用左側全部篩選條件。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>A2 受傷事故 原始逐筆資料下載</h2>
+        </div>
+        <p class="hint">A2（受傷）事故資料量龐大（約 434 萬列），網站互動圖表僅使用彙整統計，若需逐筆資料進一步分析，可下載以下各年度 gzip 壓縮 CSV 原始檔（解壓縮後為 UTF-8 CSV，可用 Excel／Python／R 等工具開啟；Excel 開啟前請先解壓縮 .gz）。</p>
+        <ul class="download-list" id="a2DownloadList"></ul>
       </div>
     </section>
 
@@ -266,6 +304,14 @@
 <script src="data/parties.data.js"></script>
 <script src="data/enforcement.data.js"></script>
 <script src="data/indicators.data.js"></script>
+<script src="data/a2_export_manifest.data.js"></script>
+<script src="data/a2_by_county.data.js"></script>
+<script src="data/a2_by_month.data.js"></script>
+<script src="data/a2_by_hour.data.js"></script>
+<script src="data/a2_acc_type_minor.data.js"></script>
+<script src="data/a2_cause_minor.data.js"></script>
+<script src="data/a2_crosstab.data.js"></script>
+<script src="data/a2_geo.data.js"></script>
 
 <!-- 應用程式邏輯 -->
 <script src="js/util.js"></script>

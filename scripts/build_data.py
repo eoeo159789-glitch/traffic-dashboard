@@ -13,8 +13,13 @@ build_data.py — 交通事故資料整合網站的資料建置腳本
   2. 舉發統計：把新的 xlsx 取代或新增到 data_raw/enforcement/ 對應類別的檔案中
      （只要是同樣的「統計期 x 縣市_車種」格式，新增列會自動被讀到）
   3. 縣市統計指標：更新 data_raw/indicators/縣市統計指標.xlsx（同樣格式，新增年度列即可）
-  4. 執行： python3 scripts/build_data.py
-  5. 完成後 data/*.data.js 會自動重新產生，直接重新整理網頁（index.html）即可看到新資料。
+  4. A2（受傷）事故資料：把新年度的原始 CSV 放進 data_raw/a2/<西元年份>/ 資料夾
+     （例如 data_raw/a2/115/，裡面放該年度所有分割檔，檔名不拘）。
+     因為資料量非常大（一年可能 80-90 萬列），這邊不會逐筆保留，而是在建置時
+     直接串流彙總成統計數字（不會佔用太多記憶體），同時會把每個年度的原始明細
+     清理合併、壓縮後輸出到 full_data_export/ 資料夾，供使用者下載原始逐筆資料。
+  5. 執行： python3 scripts/build_data.py
+  6. 完成後 data/*.data.js 會自動重新產生，直接重新整理網頁（index.html）即可看到新資料。
 
 需求套件： pip install python-calamine
 """
@@ -350,6 +355,168 @@ def load_indicators():
 
 
 # ---------------------------------------------------------------------------
+# A2 事故資料（僅受傷、無死亡；資料量遠大於 A1，採「串流彙總」而非逐筆保留）
+# ---------------------------------------------------------------------------
+
+A2_GEO_ROUND = 2          # 經緯度四捨五入到小數第2位（約1.1公里網格），用於地圖熱區密度（區域級即可，避免彙整表過大）
+A2_CROSSTAB_DIMS = [
+    "county", "weather", "light", "roadClass", "roadType",
+    "posType", "signalType", "accTypeMajor", "causeMajor", "hitRun",
+]
+FULL_EXPORT_DIR = os.path.join(BASE, "full_data_export")
+
+
+def load_a2():
+    """
+    串流讀取 data_raw/a2/<年度>/*.csv（每年 10-15 個分割檔，單年可能高達 80-90 萬列）。
+    不保留逐筆記錄，只累積：
+      - crosstab: 依 A2_CROSSTAB_DIMS + year 分組的件數/受傷人數
+      - byMonth / byHour: 依年度+縣市+月份/時段 分組
+      - byCounty: 依年度+縣市 分組（總計，供 KPI／排行用）
+      - accTypeMinor / causeMinor: 依年度+縣市+子類別 分組（供排行圖表用）
+      - geo: 依年度+縣市+經緯度網格 分組（供地圖熱力圖用）
+    同時把每個年度的原始明細清理後合併成一個檔案，壓縮輸出到 full_data_export/，
+    供使用者匯出原始逐筆資料做進一步分析（不會被網站載入，僅提供下載）。
+    """
+    year_dirs = sorted(glob.glob(os.path.join(RAW, "a2", "*")))
+    if not year_dirs:
+        print("  [A2] 找不到 data_raw/a2/ 資料，略過")
+        return None
+
+    crosstab = defaultdict(lambda: [0, 0])   # key: tuple(year, *dims) -> [count, injuries]
+    by_month = defaultdict(lambda: [0, 0])   # key: (year, county, month)
+    by_hour = defaultdict(lambda: [0, 0])    # key: (year, county, hour)
+    by_county = defaultdict(lambda: [0, 0])  # key: (year, county)
+    acc_type_minor = defaultdict(lambda: [0, 0])  # key: (year, county, accTypeMinor)
+    cause_minor = defaultdict(lambda: [0, 0])     # key: (year, county, causeMinor)
+    geo = defaultdict(lambda: [0, 0])        # key: (year, county, latBin, lngBin)
+
+    os.makedirs(FULL_EXPORT_DIR, exist_ok=True)
+    total_rows = 0
+    total_accidents = 0
+    export_manifest = []
+
+    for year_dir in year_dirs:
+        year_label = os.path.basename(year_dir)
+        files = sorted(glob.glob(os.path.join(year_dir, "*.csv")))
+        if not files:
+            continue
+        merged_path = os.path.join(FULL_EXPORT_DIR, f"A2_受傷交通事故資料_{year_label}年.csv")
+        merged_f = open(merged_path, "w", encoding="utf-8-sig", newline="")
+        merged_writer = None
+        year_accidents = 0
+
+        for fp in files:
+            print(f"  [A2] 讀取 {os.path.basename(fp)} ...", flush=True)
+            with open(fp, encoding="utf-8-sig", newline="") as f:
+                reader = csv.reader(f)
+                header = next(reader)
+                idx = {name: i for i, name in enumerate(header)}
+                if merged_writer is None:
+                    merged_writer = csv.writer(merged_f)
+                    merged_writer.writerow(header)
+
+                def g(row, col):
+                    i = idx.get(col)
+                    return row[i] if i is not None and i < len(row) else ""
+
+                for row in reader:
+                    total_rows += 1
+                    raw_year = g(row, "發生年度").strip()
+                    if not re.match(r"^\d{4}$", raw_year):
+                        continue  # 檔案尾端說明文字列
+                    merged_writer.writerow(row)
+                    if g(row, "當事者順位").strip() != "1":
+                        continue  # 只取事故層級列（比照 A1 的處理方式）
+                    year_accidents += 1
+                    total_accidents += 1
+                    year = int(raw_year)
+                    month = int(g(row, "發生月份") or 0)
+                    try:
+                        hour = int((g(row, "發生時間") or "0").zfill(6)[:2])
+                    except ValueError:
+                        hour = None
+                    county = extract_county_from_address(g(row, "發生地點"))
+                    _, injuries = parse_casualty(g(row, "死亡受傷人數"))
+                    weather = g(row, "天候名稱")
+                    light = g(row, "光線名稱")
+                    roadClass = g(row, "道路類別-第1當事者-名稱")
+                    roadType = g(row, "道路型態大類別名稱")
+                    posType = g(row, "事故位置大類別名稱")
+                    signalType = g(row, "號誌-號誌種類名稱")
+                    accTypeMajor = g(row, "事故類型及型態大類別名稱")
+                    accTypeMinorV = g(row, "事故類型及型態子類別名稱")
+                    causeMajor = g(row, "肇因研判大類別名稱-主要")
+                    causeMinorV = g(row, "肇因研判子類別名稱-主要")
+                    hitRun = g(row, "肇事逃逸類別名稱-是否肇逃")
+
+                    dims = {
+                        "county": county, "weather": weather, "light": light,
+                        "roadClass": roadClass, "roadType": roadType, "posType": posType,
+                        "signalType": signalType, "accTypeMajor": accTypeMajor,
+                        "causeMajor": causeMajor, "hitRun": hitRun,
+                    }
+                    ck = (year,) + tuple(dims[d] for d in A2_CROSSTAB_DIMS)
+                    e = crosstab[ck]; e[0] += 1; e[1] += injuries
+
+                    e = by_month[(year, county, month)]; e[0] += 1; e[1] += injuries
+                    if hour is not None:
+                        e = by_hour[(year, county, hour)]; e[0] += 1; e[1] += injuries
+                    e = by_county[(year, county)]; e[0] += 1; e[1] += injuries
+                    e = acc_type_minor[(year, county, accTypeMinorV)]; e[0] += 1; e[1] += injuries
+                    e = cause_minor[(year, county, causeMinorV)]; e[0] += 1; e[1] += injuries
+
+                    try:
+                        lat = round(float(g(row, "緯度") or 0), A2_GEO_ROUND)
+                        lng = round(float(g(row, "經度") or 0), A2_GEO_ROUND)
+                        if abs(lat) > 1 and abs(lng) > 1:
+                            e = geo[(year, county, lat, lng)]; e[0] += 1; e[1] += injuries
+                    except ValueError:
+                        pass
+
+        merged_f.close()
+        # 壓縮輸出，刪除未壓縮版本以節省空間
+        import gzip as _gzip
+        with open(merged_path, "rb") as fin, _gzip.open(merged_path + ".gz", "wb", compresslevel=6) as fout:
+            fout.writelines(fin)
+        gz_size = os.path.getsize(merged_path + ".gz")
+        os.remove(merged_path)
+        print(f"  [A2] {year_label}年：{year_accidents:,} 件事故 → {os.path.basename(merged_path)}.gz ({gz_size/1024/1024:.1f} MB)")
+        west_year = int(year_label) + 1911 if re.match(r"^\d{2,3}$", year_label) else None
+        export_manifest.append({
+            "rocYear": year_label,
+            "year": west_year,
+            "filename": os.path.basename(merged_path) + ".gz",
+            "sizeBytes": gz_size,
+            "accidents": year_accidents,
+        })
+
+    def dictify(d, dim_names):
+        out = []
+        for k, v in d.items():
+            row = dict(zip(dim_names, k))
+            row["count"] = v[0]
+            row["injuries"] = v[1]
+            out.append(row)
+        return out
+
+    result = {
+        "crosstab": dictify(crosstab, ["year"] + A2_CROSSTAB_DIMS),
+        "byMonth": dictify(by_month, ["year", "county", "month"]),
+        "byHour": dictify(by_hour, ["year", "county", "hour"]),
+        "byCounty": dictify(by_county, ["year", "county"]),
+        "accTypeMinor": dictify(acc_type_minor, ["year", "county", "accTypeMinor"]),
+        "causeMinor": dictify(cause_minor, ["year", "county", "causeMinor"]),
+        "geo": dictify(geo, ["year", "county", "lat", "lng"]),
+        "exportManifest": export_manifest,
+    }
+    print(f"  [A2] 總計掃描 {total_rows:,} 列原始資料，{total_accidents:,} 件事故")
+    for k, v in result.items():
+        print(f"       {k}: {len(v):,} 筆彙總列")
+    return result
+
+
+# ---------------------------------------------------------------------------
 # 輸出
 # ---------------------------------------------------------------------------
 
@@ -371,6 +538,8 @@ def main():
     enforcement = load_enforcement()
     print("=== 建置縣市統計指標資料 ===")
     indicators = load_indicators()
+    print("=== 建置 A2（受傷）事故彙總資料 ===")
+    a2 = load_a2()
 
     years = sorted(set(a["year"] for a in accidents))
     meta = {
@@ -379,6 +548,8 @@ def main():
         "enforcementYears": sorted(set(e["year"] for e in enforcement)),
         "enforcementCategories": sorted(set(e["category"] for e in enforcement)),
         "indicatorNames": sorted(set(i["indicator"] for i in indicators)),
+        "a2CrosstabDims": A2_CROSSTAB_DIMS,
+        "a2Years": sorted(set(r["year"] for r in a2["byCounty"])) if a2 else [],
         "generatedAt": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -388,6 +559,15 @@ def main():
     write_js("ENFORCEMENT", enforcement, "enforcement.data.js")
     write_js("INDICATORS", indicators, "indicators.data.js")
     write_js("META", meta, "meta.data.js")
+    if a2:
+        write_js("A2_EXPORT_MANIFEST", a2["exportManifest"], "a2_export_manifest.data.js")
+        write_js("A2_CROSSTAB", a2["crosstab"], "a2_crosstab.data.js")
+        write_js("A2_BY_MONTH", a2["byMonth"], "a2_by_month.data.js")
+        write_js("A2_BY_HOUR", a2["byHour"], "a2_by_hour.data.js")
+        write_js("A2_BY_COUNTY", a2["byCounty"], "a2_by_county.data.js")
+        write_js("A2_ACC_TYPE_MINOR", a2["accTypeMinor"], "a2_acc_type_minor.data.js")
+        write_js("A2_CAUSE_MINOR", a2["causeMinor"], "a2_cause_minor.data.js")
+        write_js("A2_GEO", a2["geo"], "a2_geo.data.js")
     print("完成！")
 
 

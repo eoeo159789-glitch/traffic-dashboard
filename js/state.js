@@ -61,7 +61,46 @@ const State = (() => {
     return _cache;
   }
 
-  function invalidate() { _cache = null; emitChange(); }
+  // ---- A2（受傷）彙整統計資料：套用側邊欄篩選 ----
+  // A2_CROSSTAB 具備與 A1 相同的維度欄位（county/weather/light/roadClass/accTypeMajor/causeMajor 等），
+  // 故可直接沿用側邊欄篩選條件；A2_BY_COUNTY / A2_BY_MONTH / A2_BY_HOUR / A2_ACC_TYPE_MINOR /
+  // A2_CAUSE_MINOR / A2_GEO 僅有 year + county 兩個共通維度，僅套用年度與縣市篩選。
+  let _a2CrosstabCache = null, _a2YearCountyCache = {};
+  function matchesA2Crosstab(r) {
+    if (!filters.years.has(r.year)) return false;
+    if (!filters.counties.has(r.county)) return false;
+    if (filters.weather.size && !filters.weather.has(r.weather)) return false;
+    if (filters.light.size && !filters.light.has(r.light)) return false;
+    if (filters.roadClass.size && !filters.roadClass.has(r.roadClass)) return false;
+    if (filters.accTypeMajor.size && !filters.accTypeMajor.has(r.accTypeMajor)) return false;
+    if (filters.causeMajor.size && !filters.causeMajor.has(r.causeMajor)) return false;
+    return true;
+  }
+  function a2CrosstabFiltered() {
+    if (_a2CrosstabCache) return _a2CrosstabCache;
+    _a2CrosstabCache = (window.A2_CROSSTAB || []).filter(matchesA2Crosstab);
+    return _a2CrosstabCache;
+  }
+  function a2YearCountyFiltered(dataName) {
+    if (_a2YearCountyCache[dataName]) return _a2YearCountyCache[dataName];
+    const arr = window[dataName] || [];
+    const out = arr.filter(r => filters.years.has(r.year) && filters.counties.has(r.county));
+    _a2YearCountyCache[dataName] = out;
+    return out;
+  }
+  function a2ByCountyFiltered() { return a2YearCountyFiltered('A2_BY_COUNTY'); }
+  function a2ByMonthFiltered() { return a2YearCountyFiltered('A2_BY_MONTH'); }
+  function a2ByHourFiltered() { return a2YearCountyFiltered('A2_BY_HOUR'); }
+  function a2AccTypeMinorFiltered() { return a2YearCountyFiltered('A2_ACC_TYPE_MINOR'); }
+  function a2CauseMinorFiltered() { return a2YearCountyFiltered('A2_CAUSE_MINOR'); }
+  function a2GeoFiltered() { return a2YearCountyFiltered('A2_GEO'); }
+
+  function invalidate() {
+    _cache = null;
+    _a2CrosstabCache = null;
+    _a2YearCountyCache = {};
+    emitChange();
+  }
 
   function toggleInSet(setKey, value) {
     const s = filters[setKey];
@@ -93,5 +132,7 @@ const State = (() => {
   return {
     DIMENSIONS, filters, uniqueValues, matches, filtered, invalidate,
     toggleInSet, setAll, resetAll, onChange, partiesFor,
+    a2CrosstabFiltered, a2ByCountyFiltered, a2ByMonthFiltered, a2ByHourFiltered,
+    a2AccTypeMinorFiltered, a2CauseMinorFiltered, a2GeoFiltered,
   };
 })();

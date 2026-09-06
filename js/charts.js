@@ -225,6 +225,137 @@ const Charts = (() => {
     return { rowTop, colTop, grid };
   }
 
+  // ---------------- A2 受傷事故（彙整統計）----------------
+
+  function renderA2Trend(rows) {
+    const byYear = new Map();
+    META.a2Years.forEach(y => byYear.set(y, { count: 0, injuries: 0 }));
+    rows.forEach(r => {
+      const o = byYear.get(r.year) || { count: 0, injuries: 0 };
+      o.count += r.count; o.injuries += r.injuries;
+      byYear.set(r.year, o);
+    });
+    const years = [...byYear.keys()].sort();
+    upsert('a2TrendChart', {
+      type: 'line',
+      data: {
+        labels: years.map(y => y + '年'),
+        datasets: [
+          { label: 'A2 事故件數', data: years.map(y => byYear.get(y).count), borderColor: Util.seriesColor(4), backgroundColor: Util.seriesColor(4), tension: .25, borderWidth: 2, pointRadius: 3 },
+          { label: 'A2 受傷人數', data: years.map(y => byYear.get(y).injuries), borderColor: Util.seriesColor(2), backgroundColor: Util.seriesColor(2), tension: .25, borderWidth: 2, pointRadius: 3 },
+        ],
+      },
+      options: baseOptions(),
+    });
+  }
+
+  function renderA2CountyRank(rows) {
+    const m = new Map();
+    rows.forEach(r => m.set(r.county, (m.get(r.county) || 0) + r.count));
+    const arr = Util.sortMapDesc(m);
+    upsert('a2CountyRankChart', {
+      type: 'bar',
+      data: {
+        labels: arr.map(x => x[0]),
+        datasets: [{ label: 'A2 受傷事故件數', data: arr.map(x => x[1]), backgroundColor: Util.seriesColor(4), borderRadius: 4 }],
+      },
+      options: baseOptions({
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          y: { ticks: { color: Util.chartTextColor(), font: { size: 10 } }, grid: { display: false } },
+        },
+      }),
+    });
+  }
+
+  // 依彙整統計（agg rows，每列已含 count / injuries 加總值）繪製交叉表 / 單一維度分布
+  // dimGetters: { key: (row) => value } 供 rowKey/colKey/dimKey 取值使用（A2 彙整表欄位與 State.DIMENSIONS 同名）
+
+  function renderCrossTableAgg(tableId, rows, rowKey, colKey, metric) {
+    const table = document.getElementById(tableId);
+    const rowDim = State.DIMENSIONS[rowKey], colDim = State.DIMENSIONS[colKey];
+    const rowTotals = Util.sumBy(rows, rowDim.get, r => r[metric] || 0);
+    const colTotals = Util.sumBy(rows, colDim.get, r => r[metric] || 0);
+    const rowTop = Util.sortMapDesc(rowTotals).slice(0, 25).map(x => x[0]);
+    const colTop = Util.sortMapDesc(colTotals).slice(0, 12).map(x => x[0]);
+
+    const grid = new Map();
+    let maxVal = 0;
+    for (const r of rows) {
+      const rv = rowDim.get(r), cv = colDim.get(r);
+      if (!rowTop.includes(rv) || !colTop.includes(cv)) continue;
+      const key = rv + '' + cv;
+      const v = (grid.get(key) || 0) + (r[metric] || 0);
+      grid.set(key, v);
+      if (v > maxVal) maxVal = v;
+    }
+
+    let html = '<thead><tr><th class="rowhead">' + rowDim.label + ' \\ ' + colDim.label + '</th>';
+    colTop.forEach(c => html += `<th>${c}</th>`);
+    html += '</tr></thead><tbody>';
+    rowTop.forEach(r => {
+      html += `<tr><th class="rowhead">${r}</th>`;
+      colTop.forEach(c => {
+        const v = grid.get(r + '' + c) || 0;
+        const t = maxVal ? v / maxVal : 0;
+        const bg = v > 0 ? Util.seqColor(t) : 'transparent';
+        const textColor = t > 0.55 ? '#fff' : 'inherit';
+        html += `<td class="cell" style="background:${bg};color:${textColor}">${v ? Util.fmtNum(v) : ''}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+    return { rowTop, colTop, grid };
+  }
+
+  function renderSingleDimAgg(canvasId, rows, dimKey, metric, topN = 15) {
+    const dim = State.DIMENSIONS[dimKey];
+    const m = Util.sumBy(rows, dim.get, r => r[metric] || 0);
+    const arr = Util.sortMapDesc(m).slice(0, topN);
+    upsert(canvasId, {
+      type: 'bar',
+      data: {
+        labels: arr.map(x => String(x[0])),
+        datasets: [{ label: dim.label, data: arr.map(x => x[1]), backgroundColor: Util.seriesColor(4), borderRadius: 4 }],
+      },
+      options: baseOptions({
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          y: { ticks: { color: Util.chartTextColor(), font: { size: 10 } }, grid: { display: false } },
+        },
+      }),
+    });
+  }
+
+  function renderCauseChartAgg(rows, metric) {
+    const m = new Map();
+    rows.forEach(r => {
+      if (!r.causeMinor || r.causeMinor === '尚未發現肇事因素') return;
+      m.set(r.causeMinor, (m.get(r.causeMinor) || 0) + (r[metric] || 0));
+    });
+    const arr = Util.sortMapDesc(m).slice(0, 15);
+    upsert('causeChart', {
+      type: 'bar',
+      data: {
+        labels: arr.map(x => x[0]),
+        datasets: [{ label: metric === 'injuries' ? '受傷人數' : '事故件數', data: arr.map(x => x[1]), backgroundColor: Util.seriesColor(7), borderRadius: 4 }],
+      },
+      options: baseOptions({
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
+          y: { ticks: { color: Util.chartTextColor(), font: { size: 10 } }, grid: { display: false } },
+        },
+      }),
+    });
+  }
+
   // ---------------- 事故 vs 舉發執法 ----------------
 
   function renderEnfScatter(counties, years, category, accByCounty) {
@@ -399,5 +530,6 @@ const Charts = (() => {
     renderSingleDim, renderCauseChart, renderCrossTable,
     renderEnfScatter, renderEnfTrend, renderEnfBar,
     renderPopRate, renderDensityScatter, renderLongTrend,
+    renderA2Trend, renderA2CountyRank, renderCrossTableAgg, renderSingleDimAgg, renderCauseChartAgg,
   };
 })();

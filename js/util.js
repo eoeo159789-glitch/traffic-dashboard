@@ -66,6 +66,12 @@ const Util = (() => {
     return (n * 100).toFixed(digits) + '%';
   }
 
+  function fmtBytes(n) {
+    if (!n) return '—';
+    const mb = n / 1024 / 1024;
+    return mb >= 1 ? mb.toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB';
+  }
+
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -96,6 +102,6 @@ const Util = (() => {
 
   return {
     PALETTE, STATUS, seriesColor, isDark, chartTextColor, chartGridColor,
-    groupBy, countBy, sumBy, sortMapDesc, fmtNum, fmtPct, downloadBlob, toCsv, seqColor,
+    groupBy, countBy, sumBy, sortMapDesc, fmtNum, fmtPct, fmtBytes, downloadBlob, toCsv, seqColor,
   };
 })();

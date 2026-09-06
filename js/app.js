@@ -62,12 +62,17 @@
     const deaths = accidents.reduce((s, a) => s + a.deaths, 0);
     const injuries = accidents.reduce((s, a) => s + a.injuries, 0);
     const hitRun = accidents.filter(a => a.hitRun === '是').length;
+    const a2Rows = State.a2ByCountyFiltered();
+    const a2Count = a2Rows.reduce((s, r) => s + r.count, 0);
+    const a2Injuries = a2Rows.reduce((s, r) => s + r.injuries, 0);
     const cards = [
-      { label: '篩選後事故件數', value: Util.fmtNum(accidents.length) },
-      { label: '死亡人數', value: Util.fmtNum(deaths), critical: true },
-      { label: '受傷人數', value: Util.fmtNum(injuries) },
-      { label: '肇事逃逸件數', value: Util.fmtNum(hitRun), sub: accidents.length ? Util.fmtPct(hitRun / accidents.length) : '—' },
-      { label: '平均每件死亡人數', value: accidents.length ? (deaths / accidents.length).toFixed(2) : '—', sub: 'A1 事故定義為至少 1 人死亡' },
+      { label: '篩選後 A1 事故件數', value: Util.fmtNum(accidents.length) },
+      { label: 'A1 死亡人數', value: Util.fmtNum(deaths), critical: true },
+      { label: 'A1 受傷人數', value: Util.fmtNum(injuries) },
+      { label: '肇事逃逸件數（A1）', value: Util.fmtNum(hitRun), sub: accidents.length ? Util.fmtPct(hitRun / accidents.length) : '—' },
+      { label: '平均每件死亡人數（A1）', value: accidents.length ? (deaths / accidents.length).toFixed(2) : '—', sub: 'A1 事故定義為至少 1 人死亡' },
+      { label: 'A2 受傷事故件數', value: Util.fmtNum(a2Count), sub: '依年度/縣市篩選彙整' },
+      { label: 'A2 受傷人數', value: Util.fmtNum(a2Injuries) },
     ];
     document.getElementById('kpiRow').innerHTML = cards.map(c => `
       <div class="kpi-card">
@@ -101,6 +106,21 @@
     if (next) next.onclick = () => { tablePage++; renderTable(State.filtered()); };
   }
 
+  function renderA2DownloadList() {
+    const el = document.getElementById('a2DownloadList');
+    if (!el) return;
+    const rows = (window.A2_EXPORT_MANIFEST || []).slice().sort((a, b) => a.year - b.year);
+    if (!rows.length) { el.innerHTML = '<li class="hint">找不到原始資料匯出檔（full_data_export/），請確認 build_data.py 是否已重新執行。</li>'; return; }
+    el.innerHTML = rows.map(r => `
+      <li>
+        <span>${r.year} 年（民國 ${r.rocYear} 年）A2 受傷交通事故原始資料 — ${Util.fmtNum(r.accidents)} 件事故</span>
+        <a class="btn" href="full_data_export/${encodeURIComponent(r.filename)}" download>
+          ⭳ 下載 .gz <span class="meta">(${Util.fmtBytes(r.sizeBytes)})</span>
+        </a>
+      </li>
+    `).join('');
+  }
+
   // ---------------- 各分頁渲染 ----------------
 
   function renderOverview(accidents) {
@@ -110,6 +130,8 @@
     Charts.renderSimpleDonut('weatherChart', accidents, 'weather');
     Charts.renderHourChart(accidents);
     Charts.renderSimpleDonut('accTypeChart', accidents, 'accTypeMajor');
+    Charts.renderA2Trend(State.a2ByCountyFiltered());
+    Charts.renderA2CountyRank(State.a2ByCountyFiltered());
   }
 
   function renderMapTab(accidents) {
@@ -117,13 +139,24 @@
     MapView.invalidateSize();
   }
 
+  let exploreSource = 'a1';
   let crossState = { row: 'weather', col: 'accTypeMajor', metric: 'count' };
+
   function renderExplore(accidents) {
-    const result = Charts.renderCrossTable('crossTable', accidents, crossState.row, crossState.col, crossState.metric);
-    window.__lastCross = { ...crossState, ...result };
     const singleDimKey = document.getElementById('singleDim').value;
-    Charts.renderSingleDim('singleDimChart', accidents, singleDimKey);
-    Charts.renderCauseChart(accidents);
+    if (exploreSource === 'a2') {
+      const rows = State.a2CrosstabFiltered();
+      const metric = crossState.metric === 'deaths' ? 'count' : crossState.metric; // A2 無死亡欄位
+      const result = Charts.renderCrossTableAgg('crossTable', rows, crossState.row, crossState.col, metric);
+      window.__lastCross = { ...crossState, metric, ...result };
+      Charts.renderSingleDimAgg('singleDimChart', rows, singleDimKey, metric);
+      Charts.renderCauseChartAgg(State.a2CauseMinorFiltered(), metric === 'injuries' ? 'injuries' : 'count');
+    } else {
+      const result = Charts.renderCrossTable('crossTable', accidents, crossState.row, crossState.col, crossState.metric);
+      window.__lastCross = { ...crossState, ...result };
+      Charts.renderSingleDim('singleDimChart', accidents, singleDimKey);
+      Charts.renderCauseChart(accidents);
+    }
   }
 
   function renderEnforcementTab(accidents) {
@@ -174,21 +207,61 @@
         currentTab = btn.dataset.tab;
         document.getElementById('tab-' + currentTab).classList.add('active');
         renderCurrentTab();
+        closeSidebar();
       });
     });
   }
 
+  // ---------------- 手機側邊欄開關 ----------------
+
+  function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebarBackdrop').classList.add('show');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarBackdrop').classList.remove('show');
+  }
+  function setupSidebarToggle() {
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+      const sb = document.getElementById('sidebar');
+      sb.classList.contains('open') ? closeSidebar() : openSidebar();
+    });
+    document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebar);
+  }
+
   // ---------------- 下拉選單初始化 ----------------
 
-  function setupSelects() {
-    const dimOptions = Object.entries(State.DIMENSIONS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
-    document.getElementById('crossRowDim').innerHTML = dimOptions;
-    document.getElementById('crossColDim').innerHTML = dimOptions;
-    document.getElementById('singleDim').innerHTML = dimOptions;
-    document.getElementById('crossRowDim').value = crossState.row;
-    document.getElementById('crossColDim').value = crossState.col;
-    document.getElementById('singleDim').value = 'weather';
+  function refreshExploreDimOptions() {
+    const keys = exploreSource === 'a2' ? META.a2CrosstabDims : Object.keys(State.DIMENSIONS);
+    const dimOptions = keys.map(k => `<option value="${k}">${State.DIMENSIONS[k].label}</option>`).join('');
+    const rowSel = document.getElementById('crossRowDim'), colSel = document.getElementById('crossColDim'), singleSel = document.getElementById('singleDim');
+    rowSel.innerHTML = dimOptions;
+    colSel.innerHTML = dimOptions;
+    singleSel.innerHTML = dimOptions;
+    rowSel.value = keys.includes(crossState.row) ? crossState.row : keys[0];
+    colSel.value = keys.includes(crossState.col) ? crossState.col : keys[1] || keys[0];
+    singleSel.value = keys.includes('weather') ? 'weather' : keys[0];
+    crossState.row = rowSel.value; crossState.col = colSel.value;
 
+    const metricSel = document.getElementById('crossMetric');
+    if (exploreSource === 'a2') {
+      metricSel.innerHTML = '<option value="count">事故件數</option><option value="injuries">受傷人數</option>';
+      if (crossState.metric === 'deaths') crossState.metric = 'count';
+    } else {
+      metricSel.innerHTML = '<option value="count">事故件數</option><option value="deaths">死亡人數</option><option value="injuries">受傷人數</option>';
+    }
+    metricSel.value = crossState.metric;
+  }
+
+  function setupSelects() {
+    refreshExploreDimOptions();
+
+    document.getElementById('exploreSourceSelect').addEventListener('change', e => {
+      exploreSource = e.target.value;
+      refreshExploreDimOptions();
+      renderCurrentTab();
+    });
     document.getElementById('crossRowDim').addEventListener('change', e => { crossState.row = e.target.value; renderCurrentTab(); });
     document.getElementById('crossColDim').addEventListener('change', e => { crossState.col = e.target.value; renderCurrentTab(); });
     document.getElementById('crossMetric').addEventListener('change', e => { crossState.metric = e.target.value; renderCurrentTab(); });
@@ -262,6 +335,8 @@
     setupTabs();
     setupSelects();
     setupButtons();
+    setupSidebarToggle();
+    renderA2DownloadList();
     MapView.init();
 
     State.onChange(() => { tablePage = 1; renderCurrentTab(); });
