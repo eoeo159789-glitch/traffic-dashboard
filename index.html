@@ -155,7 +155,22 @@
           半徑 <input type="number" id="customBufferRadius" value="200" min="10" max="5000" step="10"> 公尺
           <span class="hint" id="customBufferResult"></span>
         </div>
-        <p class="hint">選擇縣市／鄉鎮或輸入座標可將地圖跳轉至該位置；定位後會在地圖上顯示綠色標記，並即時計算該座標半徑內的 A1／A2 事故概況（A2 因僅有約 1 公里網格資料，為概略估算）。鄉鎮清單僅涵蓋下方兩份路口名單中出現過的鄉鎮（涵蓋全臺主要易肇事區域，非完整 368 鄉鎮清單）。</p>
+        <div class="nav-row">
+          <span class="nav-label">熱點查詢：</span>
+          <select id="hpDatasetSelect">
+            <option value="hotspot1000">全國1000易肇事路口</option>
+            <option value="safety799">永續提升人行安全799處補助地點</option>
+          </select>
+          <input type="text" id="hpSearchInput" placeholder="搜尋名稱／位置關鍵字" class="search-input">
+          <select id="hpPointSelect" class="point-select"></select>
+          <select id="hpRadiusSelect"></select>
+          <button class="btn" id="hpQueryBtn">🔍 查詢</button>
+        </div>
+        <div class="nav-row" id="hpResultRow" hidden>
+          <span class="hint" id="hpResultText"></span>
+          <button class="btn" id="hpClearBtn">✕ 清除查詢</button>
+        </div>
+        <p class="hint">選擇縣市／鄉鎮或輸入座標可將地圖跳轉至該位置；定位後會在地圖上顯示綠色標記，並即時計算該座標半徑內的 A1／A2 事故概況（A2 因僅有約 1 公里網格資料，為概略估算）。鄉鎮清單僅涵蓋下方兩份路口名單中出現過的鄉鎮（涵蓋全臺主要易肇事區域，非完整 368 鄉鎮清單）。「熱點查詢」可直接從 1000易肇事路口／799人行安全補助點位清單中選一處查詢，地圖上會顯示該點位與所選半徑的環域範圍圈，統計數字為建置時預先精確計算的結果（非估算）。</p>
       </div>
 
       <div class="card">

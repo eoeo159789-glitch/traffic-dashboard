@@ -343,6 +343,75 @@
     radiusInput.addEventListener('input', updateCustomStats);
   }
 
+  // ---------------- 熱點查詢：依 799/1000 點位選擇 + 查詢按鈕，地圖顯示環域範圍 ----------------
+
+  function setupHotspotQuery() {
+    const datasetSel = document.getElementById('hpDatasetSelect');
+    const searchInput = document.getElementById('hpSearchInput');
+    const pointSel = document.getElementById('hpPointSelect');
+    const radiusSel = document.getElementById('hpRadiusSelect');
+    const queryBtn = document.getElementById('hpQueryBtn');
+    const resultRow = document.getElementById('hpResultRow');
+    const resultText = document.getElementById('hpResultText');
+    const clearBtn = document.getElementById('hpClearBtn');
+
+    radiusSel.innerHTML = META.bufferRadii.map(r => `<option value="${r}">${r} 公尺</option>`).join('');
+    radiusSel.value = 200;
+
+    function labelFor(p, dataset) {
+      const nameLike = dataset === 'safety799' ? (p.position || p.address || p.id) : (p.name || p.id);
+      return `${p.county || ''}${p.township || ''} ${nameLike}`;
+    }
+
+    function refreshPointOptions() {
+      const dataset = datasetSel.value;
+      const pts = State.pointsByDataset(dataset);
+      const kw = searchInput.value.trim().toLowerCase();
+      const filtered = kw ? pts.filter(p => {
+        const hay = [p.name, p.position, p.address, p.township, p.county].filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(kw);
+      }) : pts;
+      const limited = filtered.slice(0, 300);
+      pointSel.innerHTML = limited.map(p => `<option value="${p.id}">${labelFor(p, dataset)}</option>`).join('');
+      if (filtered.length > limited.length) {
+        const opt = document.createElement('option');
+        opt.disabled = true;
+        opt.textContent = `…符合 ${filtered.length} 筆，僅顯示前 ${limited.length} 筆，請輸入關鍵字縮小範圍`;
+        pointSel.appendChild(opt);
+      }
+    }
+
+    datasetSel.addEventListener('change', refreshPointOptions);
+    searchInput.addEventListener('input', refreshPointOptions);
+    refreshPointOptions();
+
+    queryBtn.addEventListener('click', () => {
+      const dataset = datasetSel.value;
+      const pointId = pointSel.value;
+      if (!pointId) { alert('請先選擇一個點位'); return; }
+      const pts = State.pointsByDataset(dataset);
+      const p = pts.find(x => x.id === pointId);
+      if (!p) return;
+      const radius = Number(radiusSel.value) || 200;
+      const a1 = State.bufferA1For(p.id);
+      const a2 = State.bufferA2For(p.id);
+      const b1 = (a1 && a1[radius]) ? a1[radius] : [0, 0, 0];
+      const b2 = (a2 && a2[radius]) ? a2[radius] : [0, 0];
+      MapView.setCustomPoint(p.lat, p.lng, radius);
+      const label = labelFor(p, dataset);
+      resultText.textContent = `${label}｜半徑 ${radius}m 內：A1 ${Util.fmtNum(b1[0])} 件（死亡 ${b1[1]}／受傷 ${b1[2]}）／A2 ${Util.fmtNum(b2[0])} 件（受傷 ${Util.fmtNum(b2[1])}）〔精確統計〕`;
+      resultRow.hidden = false;
+      if (document.querySelector('.tab-btn[data-tab="map"]') && currentTab !== 'map') {
+        document.querySelector('.tab-btn[data-tab="map"]').click();
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      MapView.clearCustomPoint();
+      resultRow.hidden = true;
+    });
+  }
+
   // ---------------- 按鈕事件 ----------------
 
   function setupButtons() {
@@ -404,6 +473,7 @@
     setupButtons();
     setupSidebarToggle();
     setupMapNav();
+    setupHotspotQuery();
     renderA2DownloadList();
     MapView.init();
     Hotspot.init();

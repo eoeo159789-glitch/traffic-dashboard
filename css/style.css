@@ -386,6 +386,7 @@ a { color: var(--series-1); }
   background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 5px 8px; font-size: 12px; min-width: 160px;
 }
+.point-select { min-width: 220px; max-width: 320px; }
 .map-layer-tools label.hint { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .download-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .download-list li {
