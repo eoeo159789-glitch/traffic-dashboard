@@ -345,61 +345,127 @@
 
   // ---------------- 熱點查詢：依 799/1000 點位選擇 + 查詢按鈕，地圖顯示環域範圍 ----------------
 
+  function hpColumnsFor(dataset) {
+    const base = dataset === 'safety799'
+      ? [
+          { key: 'id', label: '編號' },
+          { key: 'source', label: '資料來源' },
+          { key: 'county', label: '縣市' },
+          { key: 'township', label: '鄉鎮市區' },
+          { key: 'position', label: '路口位置' },
+          { key: 'address', label: '完整地址' },
+        ]
+      : [
+          { key: 'id', label: '編號' },
+          { key: 'county', label: '縣市' },
+          { key: 'township', label: '鄉鎮市區' },
+          { key: 'name', label: '路口名稱' },
+          { key: 'rank', label: '原始排行', numeric: true },
+          { key: 'count', label: '原始件數', numeric: true },
+          { key: 'deaths', label: '原始死亡', numeric: true },
+          { key: 'injuries', label: '原始受傷', numeric: true },
+        ];
+    return base.concat([
+      { key: 'a1Count', label: 'A1件數(半徑內)', numeric: true },
+      { key: 'a1Deaths', label: 'A1死亡', numeric: true },
+      { key: 'a1Injuries', label: 'A1受傷', numeric: true },
+      { key: 'a2Count', label: 'A2件數(半徑內)', numeric: true },
+      { key: 'a2Injuries', label: 'A2受傷', numeric: true },
+      { key: 'a2Precision', label: 'A2統計方式' },
+      { key: 'lat', label: '緯度' },
+      { key: 'lng', label: '經度' },
+    ]);
+  }
+
   function setupHotspotQuery() {
     const datasetSel = document.getElementById('hpDatasetSelect');
+    const countySel = document.getElementById('hpCountySelect');
+    const townshipSel = document.getElementById('hpTownshipSelect');
     const searchInput = document.getElementById('hpSearchInput');
     const pointSel = document.getElementById('hpPointSelect');
-    const radiusSel = document.getElementById('hpRadiusSelect');
+    const radiusInput = document.getElementById('hpRadiusInput');
+    const radiusPresets = document.getElementById('hpRadiusPresets');
     const queryBtn = document.getElementById('hpQueryBtn');
+    const exportBtn = document.getElementById('hpExportBtn');
     const resultRow = document.getElementById('hpResultRow');
     const resultText = document.getElementById('hpResultText');
     const clearBtn = document.getElementById('hpClearBtn');
 
-    radiusSel.innerHTML = META.bufferRadii.map(r => `<option value="${r}">${r} 公尺</option>`).join('');
-    radiusSel.value = 200;
+    countySel.innerHTML = '<option value="">全部縣市</option>' + META.counties.map(c => `<option value="${c}">${c}</option>`).join('');
+    radiusPresets.innerHTML = META.bufferRadii.map(r => `<option value="${r}">`).join('');
 
     function labelFor(p, dataset) {
       const nameLike = dataset === 'safety799' ? (p.position || p.address || p.id) : (p.name || p.id);
       return `${p.county || ''}${p.township || ''} ${nameLike}`;
     }
 
-    function refreshPointOptions() {
+    function currentFilteredPoints() {
       const dataset = datasetSel.value;
-      const pts = State.pointsByDataset(dataset);
+      const county = countySel.value;
+      const township = townshipSel.value;
       const kw = searchInput.value.trim().toLowerCase();
-      const filtered = kw ? pts.filter(p => {
+      const pts = State.pointsByDataset(dataset);
+      return pts.filter(p => {
+        if (county && p.county !== county) return false;
+        if (township && p.township !== township) return false;
+        if (!kw) return true;
         const hay = [p.name, p.position, p.address, p.township, p.county].filter(Boolean).join(' ').toLowerCase();
         return hay.includes(kw);
-      }) : pts;
+      });
+    }
+
+    function refreshTownshipOptions() {
+      const dataset = datasetSel.value;
+      const county = countySel.value;
+      const pts = State.pointsByDataset(dataset).filter(p => !county || p.county === county);
+      const townships = Array.from(new Set(pts.map(p => p.township).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+      const prev = townshipSel.value;
+      townshipSel.innerHTML = '<option value="">全部鄉鎮市區</option>' + townships.map(t => `<option value="${t}">${t}</option>`).join('');
+      townshipSel.value = townships.includes(prev) ? prev : '';
+    }
+
+    function refreshPointOptions() {
+      const dataset = datasetSel.value;
+      const filtered = currentFilteredPoints();
       const limited = filtered.slice(0, 300);
       pointSel.innerHTML = limited.map(p => `<option value="${p.id}">${labelFor(p, dataset)}</option>`).join('');
       if (filtered.length > limited.length) {
         const opt = document.createElement('option');
         opt.disabled = true;
-        opt.textContent = `…符合 ${filtered.length} 筆，僅顯示前 ${limited.length} 筆，請輸入關鍵字縮小範圍`;
+        opt.textContent = `…符合 ${filtered.length} 筆，僅顯示前 ${limited.length} 筆，請輸入關鍵字或選擇縣市／鄉鎮縮小範圍`;
         pointSel.appendChild(opt);
       }
     }
 
-    datasetSel.addEventListener('change', refreshPointOptions);
+    datasetSel.addEventListener('change', () => {
+      countySel.value = '';
+      refreshTownshipOptions();
+      refreshPointOptions();
+    });
+    countySel.addEventListener('change', () => {
+      refreshTownshipOptions();
+      refreshPointOptions();
+    });
+    townshipSel.addEventListener('change', refreshPointOptions);
     searchInput.addEventListener('input', refreshPointOptions);
+
+    refreshTownshipOptions();
     refreshPointOptions();
 
     queryBtn.addEventListener('click', () => {
       const dataset = datasetSel.value;
       const pointId = pointSel.value;
-      if (!pointId) { alert('請先選擇一個點位'); return; }
+      if (!pointId) { alert('請先從清單中選擇一個點位'); return; }
       const pts = State.pointsByDataset(dataset);
       const p = pts.find(x => x.id === pointId);
       if (!p) return;
-      const radius = Number(radiusSel.value) || 200;
-      const a1 = State.bufferA1For(p.id);
-      const a2 = State.bufferA2For(p.id);
-      const b1 = (a1 && a1[radius]) ? a1[radius] : [0, 0, 0];
-      const b2 = (a2 && a2[radius]) ? a2[radius] : [0, 0];
+      const radius = Number(radiusInput.value);
+      if (!isFinite(radius) || radius <= 0) { alert('請輸入有效的半徑（公尺）'); return; }
+      const s = State.pointStatsAtRadius(p, radius);
       MapView.setCustomPoint(p.lat, p.lng, radius);
       const label = labelFor(p, dataset);
-      resultText.textContent = `${label}｜半徑 ${radius}m 內：A1 ${Util.fmtNum(b1[0])} 件（死亡 ${b1[1]}／受傷 ${b1[2]}）／A2 ${Util.fmtNum(b2[0])} 件（受傷 ${Util.fmtNum(b2[1])}）〔精確統計〕`;
+      const precisionNote = s.exactA2 ? '〔精確統計〕' : '〔A1精確／A2為概略估算，如需精確請將半徑設為 50/100/200/300/500/1000 公尺〕';
+      resultText.textContent = `${label}｜半徑 ${radius}m 內：A1 ${Util.fmtNum(s.a1Count)} 件（死亡 ${s.a1Deaths}／受傷 ${s.a1Injuries}）／A2 ${Util.fmtNum(s.a2Count)} 件（受傷 ${Util.fmtNum(s.a2Injuries)}）${precisionNote}`;
       resultRow.hidden = false;
       if (document.querySelector('.tab-btn[data-tab="map"]') && currentTab !== 'map') {
         document.querySelector('.tab-btn[data-tab="map"]').click();
@@ -409,6 +475,27 @@
     clearBtn.addEventListener('click', () => {
       MapView.clearCustomPoint();
       resultRow.hidden = true;
+    });
+
+    exportBtn.addEventListener('click', () => {
+      const dataset = datasetSel.value;
+      const radius = Number(radiusInput.value);
+      if (!isFinite(radius) || radius <= 0) { alert('請輸入有效的半徑（公尺）'); return; }
+      const pts = currentFilteredPoints();
+      if (pts.length === 0) { alert('目前的縣市／鄉鎮／關鍵字篩選條件下沒有符合的點位可以匯出'); return; }
+      const rows = pts.map(p => {
+        const s = State.pointStatsAtRadius(p, radius);
+        return Object.assign({}, p, {
+          a1Count: s.a1Count, a1Deaths: s.a1Deaths, a1Injuries: s.a1Injuries,
+          a2Count: s.a2Count, a2Injuries: s.a2Injuries,
+          a2Precision: s.exactA2 ? '精確' : '概略估算',
+        });
+      });
+      const cols = hpColumnsFor(dataset);
+      const csv = Util.toCsv(rows, cols);
+      const label = dataset === 'safety799' ? '人行安全補助799處' : '易肇事路口1000處';
+      const scope = [countySel.value, townshipSel.value].filter(Boolean).join('') || '全部';
+      Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${label}_${scope}_半徑${radius}m環域統計_${Date.now()}.csv`);
     });
   }
 

@@ -157,11 +157,36 @@ const State = (() => {
     return { a1Count, a1Deaths, a1Injuries, a2Count, a2Injuries };
   }
 
+  // 指定熱點/補助點位在「任意半徑」下的統計：
+  // 半徑剛好等於建置時預先計算的固定選項（META.bufferRadii）時，直接查表回傳精確結果（A1、A2 皆精確）；
+  // 其他自訂半徑則即時計算：A1 一樣逐筆精確比對（資料量小、可即時運算），A2 沿用網格概略估算（同 customBufferStats）。
+  function pointStatsAtRadius(point, radiusM) {
+    const presets = (window.META && META.bufferRadii) || [];
+    if (presets.includes(radiusM)) {
+      const a1 = bufferA1For(point.id);
+      const a2 = bufferA2For(point.id);
+      const b1 = a1 && a1[radiusM] ? a1[radiusM] : null;
+      const b2 = a2 && a2[radiusM] ? a2[radiusM] : null;
+      if (b1 && b2) {
+        return {
+          a1Count: b1[0], a1Deaths: b1[1], a1Injuries: b1[2],
+          a2Count: b2[0], a2Injuries: b2[1], exactA2: true,
+        };
+      }
+    }
+    const approx = customBufferStats(point.lat, point.lng, radiusM);
+    return {
+      a1Count: approx.a1Count, a1Deaths: approx.a1Deaths, a1Injuries: approx.a1Injuries,
+      a2Count: approx.a2Count, a2Injuries: approx.a2Injuries, exactA2: false,
+    };
+  }
+
   return {
     DIMENSIONS, filters, uniqueValues, matches, filtered, invalidate,
     toggleInSet, setAll, resetAll, onChange, partiesFor,
     a2CrosstabFiltered, a2ByCountyFiltered, a2ByMonthFiltered, a2ByHourFiltered,
     a2AccTypeMinorFiltered, a2CauseMinorFiltered, a2GeoFiltered,
     hotspotPoints, safety799Points, pointsByDataset, bufferA1For, bufferA2For, geoJump, customBufferStats,
+    pointStatsAtRadius,
   };
 })();
