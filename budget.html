@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台灣決算地圖</title>
+<style>
+:root{
+  --bg:#eef1ee;
+  --surface:#ffffff;
+  --surface-alt:#e4e9e4;
+  --ink:#1b2a2c;
+  --ink-soft:#516059;
+  --line:#c9d1c8;
+  --accent:#b23a2e;
+  --accent-soft:#f1ddd8;
+  --accent-ink:#8c2c22;
+  --gold:#8a6a26;
+  --gold-soft:#efe6cf;
+  --focus:#2f6d5e;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11181a;
+    --surface:#182122;
+    --surface-alt:#1f2a2b;
+    --ink:#e7ede9;
+    --ink-soft:#a2b3ab;
+    --line:#33413f;
+    --accent:#e2786a;
+    --accent-soft:#3a2622;
+    --accent-ink:#f0a598;
+    --gold:#d3b06a;
+    --gold-soft:#3a331f;
+    --focus:#7fc9ae;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11181a;
+  --surface:#182122;
+  --surface-alt:#1f2a2b;
+  --ink:#e7ede9;
+  --ink-soft:#a2b3ab;
+  --line:#33413f;
+  --accent:#e2786a;
+  --accent-soft:#3a2622;
+  --accent-ink:#f0a598;
+  --gold:#d3b06a;
+  --gold-soft:#3a331f;
+  --focus:#7fc9ae;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
+  line-height:1.7;
+  font-size:15.5px;
+}
+.wrap{
+  max-width:920px;
+  margin:0 auto;
+  padding:48px 24px 80px;
+}
+
+header{
+  margin-bottom:36px;
+  padding-bottom:28px;
+  border-bottom:1px solid var(--line);
+}
+.eyebrow{
+  display:inline-block;
+  font-family:"Noto Sans TC",sans-serif;
+  font-size:12px;
+  letter-spacing:.14em;
+  color:var(--gold);
+  background:var(--gold-soft);
+  padding:4px 10px;
+  border-radius:3px;
+  margin-bottom:16px;
+  font-weight:700;
+}
+h1{
+  font-family:"Noto Serif TC",serif;
+  font-weight:900;
+  font-size:clamp(32px,5vw,44px);
+  margin:0 0 14px;
+  text-wrap:balance;
+  letter-spacing:.01em;
+}
+.lede{
+  color:var(--ink-soft);
+  font-size:16px;
+  max-width:62ch;
+  margin:0;
+}
+.meta{
+  margin-top:18px;
+  font-size:13px;
+  color:var(--ink-soft);
+  font-variant-numeric:tabular-nums;
+}
+
+.callout{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-left:4px solid var(--accent);
+  border-radius:6px;
+  padding:20px 22px;
+  margin:0 0 28px;
+}
+.callout h2{
+  font-family:"Noto Serif TC",serif;
+  font-size:16px;
+  margin:0 0 10px;
+  color:var(--accent-ink);
+}
+.callout ul{
+  margin:0;
+  padding-left:1.2em;
+}
+.callout li{margin-bottom:6px;}
+.callout li:last-child{margin-bottom:0;}
+
+.tips{
+  background:var(--surface-alt);
+  border-radius:6px;
+  padding:20px 22px;
+  margin:0 0 40px;
+}
+.tips h2{
+  font-family:"Noto Serif TC",serif;
+  font-size:16px;
+  margin:0 0 10px;
+  color:var(--focus);
+}
+.tips p{margin:0 0 10px;}
+.tips p:last-child{margin-bottom:0;}
+.kw{
+  display:inline-block;
+  font-family:"Noto Sans TC",sans-serif;
+  font-size:13px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:4px;
+  padding:2px 8px;
+  margin:2px 3px 2px 0;
+  color:var(--ink);
+}
+
+section.group{margin-bottom:40px;}
+.group-head{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  margin-bottom:14px;
+  padding-bottom:8px;
+  border-bottom:2px solid var(--line);
+}
+.group-head h2{
+  font-family:"Noto Serif TC",serif;
+  font-size:20px;
+  margin:0;
+  font-weight:700;
+}
+.group-head .count{
+  font-size:13px;
+  color:var(--gold);
+  font-weight:700;
+  background:var(--gold-soft);
+  padding:2px 9px;
+  border-radius:20px;
+  font-variant-numeric:tabular-nums;
+}
+.group-note{
+  font-size:13px;
+  color:var(--ink-soft);
+  margin-left:auto;
+}
+
+.table-scroll{overflow-x:auto;}
+table{
+  width:100%;
+  border-collapse:collapse;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:6px;
+  overflow:hidden;
+}
+th{
+  text-align:left;
+  font-size:12.5px;
+  letter-spacing:.04em;
+  color:var(--ink-soft);
+  font-weight:700;
+  padding:10px 14px;
+  background:var(--surface-alt);
+  border-bottom:1px solid var(--line);
+  white-space:nowrap;
+}
+td{
+  padding:12px 14px;
+  border-bottom:1px solid var(--line);
+  vertical-align:top;
+}
+tr:last-child td{border-bottom:none;}
+tr:nth-child(even) td{background:color-mix(in srgb, var(--surface-alt) 35%, transparent);}
+.city{
+  font-weight:700;
+  white-space:nowrap;
+}
+.org{
+  color:var(--ink-soft);
+  font-size:13.5px;
+  white-space:nowrap;
+}
+.link-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:var(--accent-ink);
+  background:var(--accent-soft);
+  border:1px solid transparent;
+  padding:5px 11px;
+  border-radius:5px;
+  font-size:13.5px;
+  font-weight:700;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.link-btn:hover{border-color:var(--accent);}
+.link-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+.status{
+  font-size:12px;
+  padding:2px 8px;
+  border-radius:20px;
+  font-weight:700;
+  white-space:nowrap;
+  display:inline-block;
+}
+.status.direct{color:var(--focus);background:color-mix(in srgb, var(--focus) 16%, transparent);}
+.status.nav{color:var(--gold);background:var(--gold-soft);}
+.note{
+  color:var(--ink-soft);
+  font-size:13px;
+}
+.pct-up{color:var(--accent-ink);font-weight:700;font-variant-numeric:tabular-nums;}
+.pct-down{color:var(--focus);font-weight:700;font-variant-numeric:tabular-nums;}
+.amt{font-variant-numeric:tabular-nums;white-space:nowrap;}
+.src-note{font-size:12.5px;color:var(--ink-soft);margin-top:12px;}
+.finding-city{font-weight:700;white-space:nowrap;vertical-align:top;}
+.severe{
+  display:inline-block;
+  font-size:11.5px;
+  font-weight:700;
+  padding:1px 8px;
+  border-radius:20px;
+  white-space:nowrap;
+  margin-top:6px;
+}
+.severe.high{color:var(--accent-ink);background:var(--accent-soft);}
+.severe.mid{color:var(--gold);background:var(--gold-soft);}
+.severe.other{color:var(--ink-soft);background:var(--surface-alt);}
+
+footer{
+  margin-top:48px;
+  padding-top:24px;
+  border-top:1px solid var(--line);
+  font-size:13px;
+  color:var(--ink-soft);
+}
+footer a{color:var(--ink-soft);}
+footer p{margin:0 0 8px;}
+
+@media (max-width:640px){
+  .group-note{display:none;}
+  th:nth-child(2),td:nth-child(2){display:none;}
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+
+
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">地方財政 · 決算查詢</span>
+    <h1>台灣決算地圖</h1>
+    <p class="lede">全台 22 個直轄市、縣（市）政府主計機關的「總決算」公告頁面彙整,方便您逐一查閱與下載近年決算書,尋找交通罰鍰、道安改善經費等特定科目的實際運用金額。</p>
+    <p class="meta">彙整時間:2026 年 9 月 · 資料來源:各縣市政府主計處（室）官方網站公告</p>
+  </header>
+
+  <div class="callout">
+    <h2>使用前請注意</h2>
+    <ul>
+      <li>台灣沒有單一入口可一次下載全部縣市的決算書,每個地方政府各自公告在自己的主計處（室）網站,格式、欄位、可查年度都不盡相同。</li>
+      <li>決算書必須經審計機關審定後才會公告,通常落後當年度 1.5～2 年,所以「近五年」實際上多半是民國 109～113 年度（2020～2024）,113 年度是否已公告請以各頁面實際顯示為準。</li>
+      <li>「表格內未逐項標示交通安全或罰鍰運用金額」是常態——這類經費多半分散在警察局、工務局或交通局的科目底下,需要在決算書內用關鍵字搜尋才找得到,詳見下方查找建議。</li>
+      <li>狀態欄標示「直達」代表已找到總決算公告頁面;「需導覽」代表只找到主計處首頁,需自行點選「預決算」或「決算」選單進入。</li>
+    </ul>
+  </div>
+
+  <div class="tips">
+    <h2>在決算書裡找交通安全科目的建議關鍵字</h2>
+    <p>下載 PDF 後,建議用 Ctrl/⌘+F 搜尋以下用詞,通常會出現在「警察局」「工務局」或「交通局」的歲出決算明細表中:</p>
+    <p>
+      <span class="kw">交通安全</span>
+      <span class="kw">交通違規罰鍰</span>
+      <span class="kw">道路交通安全改善</span>
+      <span class="kw">科技執法</span>
+      <span class="kw">交通執法</span>
+      <span class="kw">罰鍰收入運用</span>
+    </p>
+    <p>依《道路交通違規罰鍰收入分配及運用辦法》第4條,地方分配所得罰鍰至少 12% 須用於交通執法與交通安全改善,但辦法本身未規定決算書要單獨列一個科目,所以多數縣市決算書不會有一行直接寫「12%專款」,必須從相關機關的分項經費裡拼湊。</p>
+  </div>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>六都（直轄市）</h2>
+      <span class="count">6</span>
+      <span class="group-note">2024 年罰鍰收入前六名皆在此列</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>縣市</th><th>主管機關</th><th>前往查詢</th><th>狀態</th><th>備註</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="city">台北市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://dbas.gov.taipei/News.aspx?n=293AAE549527B4B5&sms=AD91142FBF023E14" target="_blank" rel="noopener">總決算公告 →</a></td><td><span class="status direct">直達</span></td><td class="note">2024 年罰鍰收入約 28.99 億元</td></tr>
+          <tr><td class="city">新北市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://www.bas.ntpc.gov.tw/home.jsp?id=2d77083c299dfb04" target="_blank" rel="noopener">總決算公告 →</a></td><td><span class="status direct">直達</span></td><td class="note">2024 年罰鍰收入約 33.89 億元,六都最高</td></tr>
+          <tr><td class="city">桃園市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://dbas.tycg.gov.tw/home.jsp?id=42&parentpath=0,13,36" target="_blank" rel="noopener">總決算公告 →</a></td><td><span class="status direct">直達</span></td><td class="note">2024 年罰鍰收入約 23.54 億元</td></tr>
+          <tr><td class="city">台中市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://www.dbas.taichung.gov.tw/16912/Nodelist" target="_blank" rel="noopener">總決算公告 →</a></td><td><span class="status direct">直達</span></td><td class="note">2024 年罰鍰收入約 27.97 億元</td></tr>
+          <tr><td class="city">台南市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://account.tainan.gov.tw/News.aspx?n=41&sms=9365" target="_blank" rel="noopener">總決算及綜計表 →</a></td><td><span class="status direct">直達</span></td><td class="note">2024 年罰鍰收入約 15.09 億元</td></tr>
+          <tr><td class="city">高雄市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://bas.kcg.gov.tw/cp.aspx?n=03923EC76784D64E" target="_blank" rel="noopener">總決算公告 →</a></td><td><span class="status direct">直達</span></td><td class="note">2024 年罰鍰收入約 20.93 億元</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>省轄市</h2>
+      <span class="count">3</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>縣市</th><th>主管機關</th><th>前往查詢</th><th>狀態</th><th>備註</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="city">基隆市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://www.klcg.gov.tw/tw/accounting/2384.html/" target="_blank" rel="noopener">總決算暨綜計表 →</a></td><td><span class="status direct">直達</span></td><td class="note">已確認公告至 111 年度</td></tr>
+          <tr><td class="city">新竹市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://dep-auditing.hccg.gov.tw/ch/home.jsp?id=21&parentpath=0,3" target="_blank" rel="noopener">總決算公告 →</a></td><td><span class="status direct">直達</span></td><td class="note">—</td></tr>
+          <tr><td class="city">嘉義市</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://account.chiayi.gov.tw/News.aspx?n=3475&sms=11654" target="_blank" rel="noopener">文件下載 →</a></td><td><span class="status direct">直達</span></td><td class="note">已確認公告至 111 年度審核報告</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>縣</h2>
+      <span class="count">13</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>縣市</th><th>主管機關</th><th>前往查詢</th><th>狀態</th><th>備註</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="city">新竹縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://accounting.hsinchu.gov.tw/News.aspx?n=748&sms=9096" target="_blank" rel="noopener">決算資料 →</a></td><td><span class="status direct">直達</span></td><td class="note">—</td></tr>
+          <tr><td class="city">苗栗縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://www.miaoli.gov.tw/accounting/News.aspx?n=941&sms=9733" target="_blank" rel="noopener">預、決算 →</a></td><td><span class="status direct">直達</span></td><td class="note">—</td></tr>
+          <tr><td class="city">彰化縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://www.chcg.gov.tw/DTO/accounting/07other/other01_list.aspx?topsn=63" target="_blank" rel="noopener">預算、決算 →</a></td><td><span class="status direct">直達</span></td><td class="note">—</td></tr>
+          <tr><td class="city">南投縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://www.nantou.gov.tw/big5/bureau/download.php?dptid=376480000au230000&cid=2323" target="_blank" rel="noopener">總決算數額表 →</a></td><td><span class="status direct">直達</span></td><td class="note">已確認公告至 111 年度</td></tr>
+          <tr><td class="city">雲林縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://accounting.yunlin.gov.tw/" target="_blank" rel="noopener">主計處首頁 →</a></td><td><span class="status nav">需導覽</span></td><td class="note">請點選站內「預決算」選單</td></tr>
+          <tr><td class="city">嘉義縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://accounting.cyhg.gov.tw/" target="_blank" rel="noopener">主計處首頁 →</a></td><td><span class="status nav">需導覽</span></td><td class="note">請點選站內「決算」選單</td></tr>
+          <tr><td class="city">屏東縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://www.pthg.gov.tw/Cus_PublicInfo_List.aspx?pptype=5&n=28FB9E6C4558B72E&sms=7EC2EEBE5846FEF9" target="_blank" rel="noopener">預算及決算書 →</a></td><td><span class="status direct">直達</span></td><td class="note">—</td></tr>
+          <tr><td class="city">宜蘭縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://bgacst.e-land.gov.tw/News.aspx?n=E316EA4999034915&sms=0B59EAAA9E4489D2" target="_blank" rel="noopener">總決算公告 →</a></td><td><span class="status direct">直達</span></td><td class="note">—</td></tr>
+          <tr><td class="city">花蓮縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://as.hl.gov.tw/" target="_blank" rel="noopener">主計處首頁 →</a></td><td><span class="status nav">需導覽</span></td><td class="note">請點選站內「本府會計報告」</td></tr>
+          <tr><td class="city">台東縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://acc.taitung.gov.tw/News.aspx?n=13459&sms=12676" target="_blank" rel="noopener">總決算公告 →</a></td><td><span class="status direct">直達</span></td><td class="note">—</td></tr>
+          <tr><td class="city">澎湖縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://www.penghu.gov.tw/accounting/" target="_blank" rel="noopener">主計處首頁 →</a></td><td><span class="status nav">需導覽</span></td><td class="note">請點選站內「最新消息／決算」</td></tr>
+          <tr><td class="city">金門縣</td><td class="org">政府主計處</td><td><a class="link-btn" href="https://kmasd.kinmen.gov.tw/" target="_blank" rel="noopener">主計處首頁 →</a></td><td><span class="status nav">需導覽</span></td><td class="note">或見縣府「財政專區」</td></tr>
+          <tr><td class="city">連江縣</td><td class="org">政府（馬祖資訊網）</td><td><a class="link-btn" href="https://www.matsu.gov.tw/chhtml/downloadclass/371030000A/612" target="_blank" rel="noopener">預算及決算書 →</a></td><td><span class="status direct">直達</span></td><td class="note">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="tips">
+    <h2>比決算書更有用:審計部「總決算審核報告」</h2>
+    <p>決算書只列金額,不會寫執行成效的優缺點;審計部每年對每個縣市出具的「總決算暨附屬單位決算及綜計表審核報告」,才會具體點名哪些機關的計畫執行有問題——例如新北市 113、114 年度審核報告就直接寫出「科技執法設備設置地點與真正的交通事故熱區不符」「部分違規案件系統漏未舉發」等具體意見,是判斷罰鍰是否真的用在刀口上的最佳資料。</p>
+    <p>所有縣市、所有年度(民國104～114年度)都可以在審計部這個統一平台查詢,用頁面上的年度和政府別下拉選單即可:<a class="link-btn" href="https://auditreport.audit.gov.tw/" target="_blank" rel="noopener">總決算審核報告查詢平臺 →</a></p>
+  </div>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>六都審核報告直達連結</h2>
+      <span class="count">6</span>
+      <span class="group-note">部分縣市另有主計處自建的年度列表頁</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>直轄市</th><th>推薦連結</th><th>說明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="city">台北市</td><td><a class="link-btn" href="https://dbas.gov.taipei/News.aspx?n=9BEE0E2FB25214BD&sms=58F7A9B554A9899A" target="_blank" rel="noopener">決算審定數列表 →</a></td><td class="note">主計處自建列表,含 88～114 年度,每筆直接連到審核報告查詢平臺對應年度</td></tr>
+          <tr><td class="city">新北市</td><td><a class="link-btn" href="https://www.bas.ntpc.gov.tw/home.jsp?id=2d77083c299dfb04" target="_blank" rel="noopener">總決算列表 →</a></td><td class="note">審核報告與決算書公告在同一列表,逐年張貼(已驗證含113、114年度)</td></tr>
+          <tr><td class="city">桃園市</td><td><a class="link-btn" href="https://auditreport.audit.gov.tw/" target="_blank" rel="noopener">審核報告查詢平臺 →</a></td><td class="note">主計處網站未見獨立列表頁,建議直接用查詢平臺選「桃園市」+年度</td></tr>
+          <tr><td class="city">台中市</td><td><a class="link-btn" href="https://www.dbas.taichung.gov.tw/16955/Lpsimplelist" target="_blank" rel="noopener">決算審定數列表 →</a></td><td class="note">最完整,110～114年度逐筆列出,114年度已公告(2026-07-28張貼)</td></tr>
+          <tr><td class="city">台南市</td><td><a class="link-btn" href="https://account.tainan.gov.tw/News.aspx?n=41&sms=9365" target="_blank" rel="noopener">總決算及綜計表 →</a></td><td class="note">審核報告與決算書同頁列表,或改用查詢平臺選「台南市」</td></tr>
+          <tr><td class="city">高雄市</td><td><a class="link-btn" href="https://bas.kcg.gov.tw/cp.aspx?n=03923EC76784D64E" target="_blank" rel="noopener">總決算列表 →</a></td><td class="note">審核報告與決算書同頁列表,或改用查詢平臺選「高雄市」</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="callout">
+    <h2>2026年最新時事:「至少12%」的規定,實際上真的有落實嗎?</h2>
+    <ul>
+      <li>媒體調閱資料揭露,新北市 2024 年度 36.7 億元罰鍰收入中,交通改善支出約 2.4 億元、交通執法支出約 4.4 億元,合計約 6.8 億元——換算下來每收 100 元罰鍰只有約 6.7 元投入交通改善,明顯低於法定 12% 下限,顯示「至少 12%」的規定在部分年度、部分城市可能並未真正落實(此為媒體另外調閱資料所得,決算書與審核報告本身都不會直接揭露這個比例)。</li>
+      <li>臺中市核定 14.5 億元的「行人安全計畫」,實際僅編列 4.2 億元預算、執行 3.7 億元,執行率明顯偏低。</li>
+      <li>六都近 4 年(約 2021–2024)交通罰鍰收入合計約 630 億元,其中新北市 144 億元最高、臺北市 117 億元、臺中市 114.5 億元;臺北市 4 年罰鍰 117 億元,轄內交通死亡人數卻反增 7 人,引發議員質疑「重罰輕改善」。</li>
+      <li>交通部長陳世凱(2026年3月)表示現行 12% 「相當不合理」,規劃調升至 <strong>30%</strong>,且擬<strong>禁止罰鍰拿去購置更多科技執法(測速照相)設備</strong>,改導向道路環境改善及事故分析,預計上半年預告修正草案,尚待各裁罰機關同意。民眾黨立委陳清龍另提修法主張直接拉高到 <strong>75%</strong>。</li>
+    </ul>
+    <p class="src-note">這個發現與本頁下方的審核意見比較形成有趣對照:審計部的審核報告關注「科技執法設備布建精不精準、裁決效率高不高」這類執行面問題,但媒體與立委真正關心的「錢有沒有依法投入道安改善」,目前的決算書與審核報告體系都無法直接回答。資料來源:<a href="https://www.setn.com/news/1888112" target="_blank" rel="noopener">三立新聞網</a>、<a href="https://www.cna.com.tw/news/ahel/202604010129.aspx" target="_blank" rel="noopener">中央社</a>、<a href="https://www.epochtimes.com/b5/26/3/17/n14720993.htm" target="_blank" rel="noopener">大紀元</a>、<a href="https://cars.tvbs.com.tw/life/319895" target="_blank" rel="noopener">TVBS地球黃金線</a>(2026年3-4月報導)。</p>
+  </div>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>六都5年交通罰鍰／裁罰收入決算比較</h2>
+      <span class="count">110–114年度</span>
+      <span class="group-note">括號內為決算數較預算數增減比率</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>縣市</th><th>口徑</th><th>110年度</th><th>111年度</th><th>112年度</th><th>113年度</th><th>114年度</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="city">臺北市</td>
+            <td class="org">交通事件裁決所</td>
+            <td class="amt">25.17億<br><span class="pct-down">(-8.5%)</span></td>
+            <td class="amt">26.86億<br><span class="pct-down">(-2.3%)</span></td>
+            <td class="amt">30.47億<br><span class="pct-up">(+24.9%)</span></td>
+            <td class="amt">28.97億<br><span class="pct-up">(+7.6%)</span></td>
+            <td class="amt">31.61億<br><span class="pct-up">(+14.9%)</span></td>
+          </tr>
+          <tr>
+            <td class="city">新北市</td>
+            <td class="org">警察局及所屬＋交通事件裁決處</td>
+            <td class="amt">30.15億<br><span class="pct-up">(+9.4%)</span></td>
+            <td class="amt">33.04億<br><span class="pct-up">(+20.4%)</span></td>
+            <td class="amt">38.10億<br><span class="pct-up">(+39.4%)</span></td>
+            <td class="amt">37.56億<br><span class="pct-up">(+35.4%)</span></td>
+            <td class="amt">42.18億<br><span class="pct-up">(+38.8%)</span></td>
+          </tr>
+          <tr>
+            <td class="city">桃園市</td>
+            <td class="org">交通局主管(混合口徑※)</td>
+            <td class="amt">8.91億<br><span class="pct-up">(+19.9%)</span></td>
+            <td class="amt">9.89億<br><span class="pct-up">(+54.2%)</span></td>
+            <td class="amt">9.64億<br><span class="pct-up">(+47.9%)</span></td>
+            <td class="amt">10.95億<br><span class="pct-up">(+57.9%)</span></td>
+            <td class="amt">27.75億<br><span class="pct-down">(-9.6%)※</span></td>
+          </tr>
+          <tr>
+            <td class="city">臺中市</td>
+            <td class="org">交通事件裁決處(純交通罰鍰)</td>
+            <td class="amt">25.54億<br><span class="pct-up">(+61.6%)</span></td>
+            <td class="amt">27.71億<br><span class="pct-up">(+75.4%)</span></td>
+            <td class="amt">30.73億<br><span class="pct-up">(+94.5%)</span></td>
+            <td class="amt">28.98億<br><span class="pct-up">(+46.6%)</span></td>
+            <td class="amt">29.32億<br><span class="pct-up">(+24.8%)</span></td>
+          </tr>
+          <tr>
+            <td class="city">臺南市</td>
+            <td class="org">警察局主管</td>
+            <td class="amt">8.97億<br><span class="pct-up">(+53.9%)</span></td>
+            <td class="amt">10.09億<br><span class="pct-up">(+55.6%)</span></td>
+            <td class="amt">14.20億<br><span class="pct-up">(+76.2%)</span></td>
+            <td class="amt">12.13億<br><span class="pct-up">(+75.1%)</span></td>
+            <td class="amt">13.23億<br><span class="pct-up">(+102.2%)</span></td>
+          </tr>
+          <tr>
+            <td class="city">高雄市</td>
+            <td class="org">警察局主管(混毒品/槍砲罰鍰※)</td>
+            <td class="amt">2.04億<br><span class="pct-down">(-2.2%)</span></td>
+            <td class="amt">2.49億<br><span class="pct-down">(-0.8%)</span></td>
+            <td class="amt">4.87億<br><span class="pct-up">(+7.6%)</span></td>
+            <td class="amt">2.18億<br><span class="pct-up">(+10.8%)</span></td>
+            <td class="amt">2.95億<br><span class="pct-up">(+23.2%)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src-note">數字為各市審計部（處）總決算審核報告「預算執行之審核」段落所載決算審定數(合計數),部分為 AI 逐年比對預算表與決算表相同科目編號後手動對齊,非官方公開的單一表格。※桃園市 114 年度數字因納入中央補助之通勤月票票證系統建置款而大幅膨脹,不宜與其他年度直接比較金額;高雄市帳戶同時記載交通、毒品、槍砲等多種罰鍰,無法從公開資料單獨拆分純交通罰鍰金額,金額量級也明顯低於其他五都,原因待查證。臺北市、新北市、桃園市 114 年度數字另可與前述「六都審核報告直達連結」自行核對最新公告。</p>
+  </section>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>六都科技執法審核意見比較</h2>
+      <span class="count">114年度</span>
+      <span class="group-note">審計部總決算審核報告摘要</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>縣市</th><th>主要審核意見重點</th><th>備註</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="finding-city">臺北市</td>
+            <td>運用科技執法查獲違規案件有助減少事故,惟舉發基準不明確、部分設備啟用前置作業不確實、保固期內故障逾限未修復卻未依約計罰。</td>
+            <td class="note">已研謀改善<span class="severe mid">中度</span></td>
+          </tr>
+          <tr>
+            <td class="finding-city">新北市</td>
+            <td>科技執法設備設置地點與實際交通事故熱區不符;校園周邊測速系統與舉發系統整合不足。</td>
+            <td class="note"><span class="severe mid">中度</span></td>
+          </tr>
+          <tr>
+            <td class="finding-city">桃園市</td>
+            <td>前20大事故熱點中7處尚未設置科技執法設備(3處在前5大內);違規影像未舉發率仍近28%;審核流程僅由承辦員警自行認定,覆核機制不足。113、114年度連續兩年被列為待改善事項,問題最具體、最嚴重。</td>
+            <td class="note">仍待改善<span class="severe high">連續兩年</span></td>
+          </tr>
+          <tr>
+            <td class="finding-city">臺中市</td>
+            <td>焦點不在設備布建,而在裁決效率:尚未裁決案件47萬餘件、逾11億元罰鍰未結案;另有巷道違規標線設置不合理引發取締爭議。</td>
+            <td class="note"><span class="severe other">問題類型不同</span></td>
+          </tr>
+          <tr>
+            <td class="finding-city">臺南市</td>
+            <td>113年度追蹤事項顯示部分已建科技執法路段事故仍未見改善、部分校園周邊高風險路段尚無設備;114年度未提出新意見。</td>
+            <td class="note">歷史遺留<span class="severe other">未新增</span></td>
+          </tr>
+          <tr>
+            <td class="finding-city">高雄市</td>
+            <td>114年度審核報告警察局主管段落完全未提及測速照相設備布建問題;反而聚焦「應收交通罰鍰久懸未清、未依限移送強制執行」。六都中唯一的例外。</td>
+            <td class="note"><span class="severe other">關注焦點不同</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src-note">「嚴重程度」為 AI 依審核報告文字語氣(如是否連續多年列為「仍待改善」)主觀判斷,非審計部官方分級。完整分析(含逐字審核意見引用)請見另行提供的《六都交通罰鍰與12%專款比較分析》文件。</p>
+  </section>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>六都道路安全改善建議比較(非科技執法)</h2>
+      <span class="count">114年度</span>
+      <span class="group-note">人行道、易肇事路口工程改善等意見</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>縣市</th><th>主要建議</th><th>具體問題</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="finding-city">臺北市</td>
+            <td class="note">交通局「道路交通安全執行計畫」執行不力</td>
+            <td>部分易肇事路段未見改善,且計畫績效長期未達目標,管考機制未落實——問題出在「有計畫但沒追蹤」。</td>
+          </tr>
+          <tr>
+            <td class="finding-city">新北市</td>
+            <td class="note">人行道空間改善(工務局)＋視障語音號誌(交通局)</td>
+            <td>人行道適宜性比率待提升,未設公共設施帶的人行道淨寬未達標準比率偏高;視障語音號誌故障通報機制不完善,部分路口未同步劃設視障引導標線。</td>
+          </tr>
+          <tr>
+            <td class="finding-city">桃園市</td>
+            <td class="note">人本交通＋易肇事路段改善(交通局)＋人行道普及(工務局)</td>
+            <td>六都中最全面:無號誌路口事故及傷亡占比持續上升、標誌標線維護與人行空間規劃不周;工務局人行道普及率待提升、學校周邊人行道規劃不完善、騎樓整平改善長度反而逐年遞減。</td>
+          </tr>
+          <tr>
+            <td class="finding-city">臺中市</td>
+            <td class="note">人本交通及無障礙人行環境(建設局)＋行人死亡人數增加(交通局)＋騎樓整平退步(都發局)</td>
+            <td>三個局處都點名同一個問題:部分行政區人行道適宜率偏低、易肇事路口尚未設人行道;行人死亡人數不減反增,部分易肇事路口未設號誌或智慧路標;騎樓整平成效長度連3年下降、施作戶同意率大幅下滑。</td>
+          </tr>
+          <tr>
+            <td class="finding-city">臺南市</td>
+            <td class="note"><span class="severe other">沒有這類意見</span></td>
+            <td>114年度索引顯示,臺南市交通局的重要審核意見全部集中在公共自行車、電動公車、候車亭等公共運輸議題,完全沒有針對人行道、易肇事路口工程改善提出意見——可能代表這方面問題較少,也可能代表本次稽核重點不在此,六都中唯一的例外。</td>
+          </tr>
+          <tr>
+            <td class="finding-city">高雄市</td>
+            <td class="note">行穿線未同步增設號誌(交通局)＋騎樓整平不足(工務局)</td>
+            <td>部分路口已增設行人穿越道標線,卻沒有同步增設對應號誌,是六都中唯一明確點出「標線與號誌不同步」這種具體工程缺失的城市;工務局騎樓整平順平效益長度未達全市騎樓總長度的三分之一。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src-note">整理自六都審計部（處）114年度總決算暨附屬單位決算及綜計表審核報告「索引」章節所列各主管機關重要審核意見標題。臺北、桃園、臺中不約而同點出「有計畫、有預算,但易肇事路段/路口改善未落實」,問題核心在執行與管考機制而非經費;騎樓整平則是桃園、臺中、高雄三都共同的痛點,且都提到進度不進反退。</p>
+  </section>
+
+  <footer>
+    <p>法源依據:《道路交通違規罰鍰收入分配及運用辦法》第3、4條(全國法規資料庫)。跨縣市彙整版可另參考行政院主計總處「地方政府總決算」專區。</p>
+    <p>連結由 AI 蒐集彙整,各政府網站內容與網址可能異動,若連結失效請至該縣市政府主計處（室）官網搜尋「總決算」,或直接用審計部「總決算審核報告查詢平臺」查詢。</p>
+  </footer>
+
+</div>
+
+</body>
+</html>
