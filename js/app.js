@@ -241,6 +241,7 @@
       case 'enforcement': renderEnforcementTab(accidents); break;
       case 'population': renderPopulationTab(accidents); break;
       case 'improve': Improve.render(); break;
+      case 'tenders': Tenders.render(); break;
       case 'table': renderTableTab(accidents); break;
     }
   }
@@ -654,6 +655,7 @@
     MapView.init();
     Hotspot.init();
     Improve.init();
+    Tenders.init();
 
     State.onChange(() => { tablePage = 1; renderCurrentTab(); });
     renderCurrentTab();

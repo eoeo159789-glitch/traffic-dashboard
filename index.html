@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>臺灣交通事故資料整合分析平台</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20260908">
 <!-- Leaflet 地圖 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
@@ -78,6 +78,7 @@
       <button class="tab-btn" data-tab="enforcement">事故 vs 舉發執法</button>
       <button class="tab-btn" data-tab="population">事故 vs 人口/縣市</button>
       <button class="tab-btn" data-tab="improve">改善趨勢分析</button>
+      <button class="tab-btn" data-tab="tenders">工程經費(標案)</button>
       <button class="tab-btn" data-tab="table">資料表與匯出</button>
     </div>
 
@@ -457,6 +458,81 @@
       </div>
     </section>
 
+    <!-- ============ 工程經費(標案) ============ -->
+    <section class="tab-panel" id="tab-tenders">
+      <div class="card">
+        <div class="card-head">
+          <h2>六都及全國交通標案 總覽</h2>
+          <div class="card-tools"><a class="btn" href="tenders.html" target="_blank" rel="noopener">↗ 開啟完整標案逐筆查詢頁</a></div>
+        </div>
+        <p class="hint">彙整全國政府電子採購網「科技執法」「標誌標線」「人行道」「道路工程」「道路改善」「拓寬工程」六大類交通安全相關標案（涵蓋 110/01/01～115/09/08 決標案件），可與「科技執法環域分析」（地圖／熱點環域分析頁）等對照經費配置與實際成效。<strong>本資料為關鍵字查詢下之下限，並非該縣市／機關實際總支出，跨類別重複已排除，詳細限制說明與逐筆資料查詢請至<a href="tenders.html" target="_blank" rel="noopener">「標案彙整」頁</a>。</strong>下方圖表會即時套用您選擇的分類、縣市、機關層級等篩選條件。</p>
+        <div class="kpi-row" id="tenderKpiRow"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>互動圖表：依篩選條件彙總</h2>
+          <div class="card-tools">
+            圖表類型：<select id="tdChartType">
+              <option value="bar-amount">長條圖（總決標金額）</option>
+              <option value="bar-count">長條圖（標案件數）</option>
+              <option value="pie-amount">圓餅圖（金額占比）</option>
+              <option value="line-year">折線圖（歷年決標金額趨勢）</option>
+            </select>
+            分組維度：<select id="tdGroupDim">
+              <option value="performLocCounty">履約地點縣市</option>
+              <option value="category">分類</option>
+              <option value="region">機關所屬地區</option>
+              <option value="govLevel">政府層級</option>
+              <option value="subsidized">是否受機關補助</option>
+            </select>
+            <button class="btn" data-export-chart="tenderChart">⭳ PNG</button>
+          </div>
+        </div>
+        <div class="chart-wrap tall" style="height:440px"><canvas id="tenderChart"></canvas></div>
+        <p class="hint" id="tenderChartNote"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>篩選條件</h2>
+          <div class="card-tools">
+            <button class="btn" id="tdResetBtn">↺ 重設篩選</button>
+            <button class="btn" id="tdExportCsv">⭳ 匯出目前篩選結果 CSV</button>
+          </div>
+        </div>
+        <div class="chip-list" id="tdCategoryChips" style="margin-bottom:14px"></div>
+        <div class="nav-row">
+          <span class="nav-label">履約地點縣市</span>
+          <select id="tdCounty"><option value="">全部縣市</option></select>
+          <span class="nav-label">機關所屬地區</span>
+          <select id="tdRegion"><option value="">全部地區</option></select>
+          <span class="nav-label">決標年度(民國)</span>
+          <select id="tdYear"><option value="">全部年度</option></select>
+        </div>
+        <div class="nav-row">
+          <span class="nav-label">相關性</span>
+          <select id="tdRelevance">
+            <option value="相關" selected>僅顯示「相關」</option>
+            <option value="">全部（含不相關）</option>
+            <option value="不相關">僅顯示「不相關」</option>
+          </select>
+          <span class="nav-label">受機關補助</span>
+          <select id="tdSubsidized"><option value="">不限</option><option value="是">是</option><option value="否">否</option></select>
+          <input type="text" id="tdKeyword" placeholder="搜尋機關名稱／標案名稱關鍵字" class="search-input">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>分組彙總明細表</h2>
+          <span class="hint" id="tenderTableSummary"></span>
+        </div>
+        <div class="table-scroll"><table class="data-table" id="tenderGroupTable"></table></div>
+        <p class="hint">此表與上方圖表使用相同的篩選條件與分組維度；金額欄位為「總決標金額」加總（新台幣元）。</p>
+      </div>
+    </section>
+
     <!-- ============ 資料表與匯出 ============ -->
     <section class="tab-panel" id="tab-table">
       <div class="card">
@@ -497,37 +573,40 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <!-- 資料檔（由 scripts/build_data.py 產生） -->
-<script src="data/meta.data.js"></script>
-<script src="data/accidents.data.js"></script>
-<script src="data/parties.data.js"></script>
-<script src="data/enforcement.data.js"></script>
-<script src="data/indicators.data.js"></script>
-<script src="data/enforcement_fines.data.js"></script>
-<script src="data/a2_export_manifest.data.js"></script>
-<script src="data/points_hotspot1000.data.js"></script>
-<script src="data/points_safety799.data.js"></script>
-<script src="data/points_tech_enforcement.data.js"></script>
-<script src="data/geo_jump.data.js"></script>
-<script src="data/point_buffer_a1.data.js"></script>
-<script src="data/point_buffer_a2.data.js"></script>
-<script src="data/a2_by_county.data.js"></script>
-<script src="data/a2_by_month.data.js"></script>
-<script src="data/a2_by_hour.data.js"></script>
-<script src="data/a2_acc_type_minor.data.js"></script>
-<script src="data/a2_acc_type_major.data.js"></script>
-<script src="data/a2_cause_minor.data.js"></script>
-<script src="data/a2_age_bracket.data.js"></script>
-<script src="data/a2_crosstab.data.js"></script>
-<script src="data/a2_geo.data.js"></script>
+<!-- 版本查詢字串（?v=）用於避免靜態主機／瀏覽器快取到更新前的舊檔，每次更新資料或程式碼請一併更新此版號 -->
+<script src="data/meta.data.js?v=20260908"></script>
+<script src="data/accidents.data.js?v=20260908"></script>
+<script src="data/parties.data.js?v=20260908"></script>
+<script src="data/enforcement.data.js?v=20260908"></script>
+<script src="data/indicators.data.js?v=20260908"></script>
+<script src="data/enforcement_fines.data.js?v=20260908"></script>
+<script src="data/a2_export_manifest.data.js?v=20260908"></script>
+<script src="data/points_hotspot1000.data.js?v=20260908"></script>
+<script src="data/points_safety799.data.js?v=20260908"></script>
+<script src="data/points_tech_enforcement.data.js?v=20260908"></script>
+<script src="data/geo_jump.data.js?v=20260908"></script>
+<script src="data/point_buffer_a1.data.js?v=20260908"></script>
+<script src="data/point_buffer_a2.data.js?v=20260908"></script>
+<script src="data/a2_by_county.data.js?v=20260908"></script>
+<script src="data/a2_by_month.data.js?v=20260908"></script>
+<script src="data/a2_by_hour.data.js?v=20260908"></script>
+<script src="data/a2_acc_type_minor.data.js?v=20260908"></script>
+<script src="data/a2_acc_type_major.data.js?v=20260908"></script>
+<script src="data/a2_cause_minor.data.js?v=20260908"></script>
+<script src="data/a2_age_bracket.data.js?v=20260908"></script>
+<script src="data/a2_crosstab.data.js?v=20260908"></script>
+<script src="data/a2_geo.data.js?v=20260908"></script>
+<script src="data/tenders.data.js?v=20260908"></script>
 
 <!-- 應用程式邏輯 -->
-<script src="js/util.js"></script>
-<script src="js/state.js"></script>
-<script src="js/charts.js"></script>
-<script src="js/map.js"></script>
-<script src="js/hotspot.js"></script>
-<script src="js/improve.js"></script>
-<script src="js/export.js"></script>
-<script src="js/app.js"></script>
+<script src="js/util.js?v=20260908"></script>
+<script src="js/state.js?v=20260908"></script>
+<script src="js/charts.js?v=20260908"></script>
+<script src="js/map.js?v=20260908"></script>
+<script src="js/hotspot.js?v=20260908"></script>
+<script src="js/improve.js?v=20260908"></script>
+<script src="js/tenders.js?v=20260908"></script>
+<script src="js/export.js?v=20260908"></script>
+<script src="js/app.js?v=20260908"></script>
 </body>
 </html>

@@ -652,9 +652,9 @@ const Charts = (() => {
         const xPix = scales.x.getPixelForValue(meanX);
         const yPix = scales.y.getPixelForValue(meanY);
         ctx.save();
-        ctx.strokeStyle = Util.chartGridColor();
+        ctx.strokeStyle = '#e5484d';
         ctx.setLineDash([6, 4]);
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.75;
         ctx.beginPath();
         ctx.moveTo(xPix, chartArea.top);
         ctx.lineTo(xPix, chartArea.bottom);
