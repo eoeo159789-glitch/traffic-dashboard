@@ -38,6 +38,8 @@ except ImportError:
     print("請先安裝: pip install python-calamine --break-system-packages", file=sys.stderr)
     sys.exit(1)
 
+from tech_enforcement import load_tech_enforcement, MISSING_COUNTIES as TECH_ENF_MISSING_COUNTIES
+
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(BASE, "data_raw")
 OUT = os.path.join(BASE, "data")
@@ -704,7 +706,7 @@ def load_a2(points=None, grid=None):
     acc_type_minor = defaultdict(lambda: [0, 0])  # key: (year, county, accTypeMinor)
     acc_type_major = defaultdict(lambda: [0, 0])  # key: (year, county, accTypeMajor)
     cause_minor = defaultdict(lambda: [0, 0])     # key: (year, county, causeMinor)
-    age_bracket = defaultdict(int)           # key: (year, county, bracket) -> 當事者人次
+    age_bracket = defaultdict(lambda: [0, 0, 0])  # key: (year, county, bracket) -> [當事者人次, 行人人次, 機車人次]
     geo = defaultdict(lambda: [0, 0])        # key: (year, county, latBin, lngBin)
 
     do_buffer = bool(points and grid is not None)
@@ -750,10 +752,18 @@ def load_a2(points=None, grid=None):
                     county = extract_county_from_address(g(row, "發生地點"))
 
                     # 當事者年齡分層：逐筆列都計入（不限當事者順位=1），供「當事者年齡結構 vs 縣市
-                    # 人口年齡結構」對照使用；年齡無法判讀（空白、-1 等）的列不計入任何分母/分子
+                    # 人口年齡結構」對照使用；年齡無法判讀（空白、-1 等）的列不計入任何分母/分子。
+                    # 同時記錄該當事者是否為「行人」「機車」身分（當事者區分-類別-大類別名稱-車種），
+                    # 供「當事者身分別（行人/機車比例）」排行使用，方便對照不同縣市高齡者的用路方式差異
                     bracket = age_bucket(g(row, "當事者事故發生時年齡"))
                     if bracket is not None:
-                        age_bracket[(year, county, bracket)] += 1
+                        e = age_bracket[(year, county, bracket)]
+                        e[0] += 1
+                        vtype = g(row, "當事者區分-類別-大類別名稱-車種")
+                        if vtype == "人":
+                            e[1] += 1
+                        elif vtype == "機車":
+                            e[2] += 1
 
                     if g(row, "當事者順位").strip() != "1":
                         continue  # 以下只取事故層級列（比照 A1 的處理方式）
@@ -844,7 +854,7 @@ def load_a2(points=None, grid=None):
         return out
 
     age_bracket_rows = [
-        {"year": y, "county": c, "bracket": b, "count": n}
+        {"year": y, "county": c, "bracket": b, "count": n[0], "pedestrianCount": n[1], "motorcycleCount": n[2]}
         for (y, c, b), n in age_bracket.items()
     ]
 
@@ -895,9 +905,22 @@ def main():
     print("=== 建置熱點路口資料（1000易肇事路口 + 799人行安全計畫補助地點）===")
     hotspot1000 = load_hotspot1000()
     safety799 = load_safety799()
+
+    print("=== 建置科技執法設備地點資料 ===")
+    tech_enf_dir = os.path.join(RAW, "tech_enforcement")
+    tech_enforcement = load_tech_enforcement(tech_enf_dir) if os.path.isdir(tech_enf_dir) else []
+    tech_enf_with_coords = [p for p in tech_enforcement if p["hasCoords"]]
+    print(f"  科技執法設備共 {len(tech_enforcement):,} 筆（其中 {len(tech_enf_with_coords):,} 筆有經緯度可供地圖／環域分析使用）")
+    if tech_enforcement:
+        print(f"  資料缺口：{', '.join(TECH_ENF_MISSING_COUNTIES)} 未提供任何科技執法設備資料；"
+              f"花蓮縣、苗栗縣（區間測速）、國道5號雪山隧道等部分地點僅有文字描述無經緯度座標，未納入地圖點位。")
+
     all_points = [
         {"id": p["id"], "lat": p["lat"], "lng": p["lng"], "county": p["county"], "township": p["township"]}
         for p in hotspot1000 + safety799
+    ] + [
+        {"id": p["id"], "lat": p["lat"], "lng": p["lng"], "county": p["county"], "township": p["district"]}
+        for p in tech_enf_with_coords
     ]
     print(f"  熱點路口共 {len(hotspot1000):,} 處，人行安全補助地點共 {len(safety799):,} 處")
 
@@ -924,6 +947,9 @@ def main():
         "bufferRadii": BUFFER_RADII_M,
         "hotspot1000Count": len(hotspot1000),
         "safety799Count": len(safety799),
+        "techEnforcementCount": len(tech_enforcement),
+        "techEnforcementWithCoordsCount": len(tech_enf_with_coords),
+        "techEnforcementMissingCounties": TECH_ENF_MISSING_COUNTIES,
         "finesYears": enforcement_fines["years"] if enforcement_fines else [],
         "generatedAt": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
     }
@@ -940,6 +966,7 @@ def main():
     write_js("META", meta, "meta.data.js")
     write_js("POINTS_HOTSPOT1000", hotspot1000, "points_hotspot1000.data.js")
     write_js("POINTS_SAFETY799", safety799, "points_safety799.data.js")
+    write_js("POINTS_TECH_ENFORCEMENT", tech_enforcement, "points_tech_enforcement.data.js")
     write_js("GEO_JUMP", geo_jump, "geo_jump.data.js")
     write_js("POINT_BUFFER_A1", buffer_a1, "point_buffer_a1.data.js")
     if a2:

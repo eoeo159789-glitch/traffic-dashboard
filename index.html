@@ -18,6 +18,7 @@
     <span class="subtitle" id="dataRangeLabel"></span>
     <div class="spacer"></div>
     <a class="theme-toggle" href="budget.html" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">🗺️ 決算地圖</a>
+    <a class="theme-toggle" href="tenders.html" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📑 標案彙整</a>
     <button class="theme-toggle" id="themeToggle">🌓 深色/淺色</button>
   </header>
 
@@ -162,6 +163,7 @@
           <select id="hpDatasetSelect">
             <option value="hotspot1000">全國1000易肇事路口</option>
             <option value="safety799">永續提升人行安全799處補助地點</option>
+            <option value="techEnforcement">科技執法設備地點（有座標者）</option>
           </select>
           <select id="hpCountySelect"><option value="">全部縣市</option></select>
           <select id="hpTownshipSelect"><option value="">全部鄉鎮市區</option></select>
@@ -192,6 +194,7 @@
             <label class="hint"><input type="checkbox" id="showA2Toggle"> 顯示 A2 受傷事故熱區</label>
             <label class="hint"><input type="checkbox" id="showHotspotToggle"> 顯示 1000 易肇事路口</label>
             <label class="hint"><input type="checkbox" id="showSafety799Toggle"> 顯示 799 人行安全補助點位</label>
+            <label class="hint"><input type="checkbox" id="showTechEnfToggle"> 顯示科技執法設備位置</label>
             <button class="btn" id="mapExportBtn">⭳ 匯出地圖 PNG</button>
           </div>
         </div>
@@ -200,7 +203,7 @@
           <div id="map"></div>
           <div class="map-legend" id="mapLegend"></div>
         </div>
-        <p class="hint" id="mapNote">點位僅顯示有經緯度座標之事故（依目前左側篩選條件）。標記顏色：紅=有死亡、橘=僅受傷。</p>
+        <p class="hint" id="mapNote">點位僅顯示有經緯度座標之事故（依目前左側篩選條件）。標記顏色：紅=有死亡、橘=僅受傷。科技執法設備位置圖層僅顯示有經緯度座標之設備（詳見「標案彙整」頁與下方環域分析表格對無座標地點的說明），資料涵蓋除新竹縣、宜蘭縣、臺東縣、連江縣外之縣市，花蓮縣僅有文字地點清單無座標故未顯示於地圖。</p>
       </div>
     </section>
 
@@ -213,6 +216,7 @@
             資料集：<select id="hsDatasetSelect">
               <option value="hotspot1000">全國1000易肇事路口</option>
               <option value="safety799">永續提升人行安全799處補助地點</option>
+              <option value="techEnforcement">科技執法設備地點（有座標者）</option>
             </select>
             半徑：<select id="hsRadiusSelect"></select>
             縣市：<select id="hsCountySelect"><option value="">全部縣市</option></select>
@@ -220,7 +224,7 @@
             <button class="btn" id="hsExportCsv">⭳ 匯出清單 CSV（含環域統計）</button>
           </div>
         </div>
-        <p class="hint">選擇資料集與半徑後，下表會即時計算每個點位在該半徑範圍內的 A1（死亡）與 A2（受傷）事故統計（A2 為建置時預先計算之精確逐筆比對結果，非地圖上的網格估算）。點欄位標題可排序，匯出 CSV 會依目前篩選／排序後的清單匯出。</p>
+        <p class="hint">選擇資料集與半徑後，下表會即時計算每個點位在該半徑範圍內的 A1（死亡）與 A2（受傷）事故統計（A2 為建置時預先計算之精確逐筆比對結果，非地圖上的網格估算）。點欄位標題可排序，匯出 CSV 會依目前篩選／排序後的清單匯出。選擇「科技執法設備地點」時，可用此表驗證「設備設置地點是否對應實際事故熱區」──若某設備半徑內的 A1／A2 件數偏低，可能代表設置地點與肇事熱區不符；本資料集僅含有經緯度座標之設備（約占全部設備 7 成，另有花蓮縣、苗栗縣區間測速及國道5號雪山隧道等設備僅有文字地點描述、新竹縣／宜蘭縣／臺東縣／連江縣完全無資料，詳見「標案彙整」頁的資料缺口說明），故本表統計僅反映有座標部分，不代表全部設備的完整分布。</p>
         <div class="hint">共 <b id="hsFilteredCount">0</b> 處符合條件</div>
         <div class="table-scroll"><table class="data-table" id="hsTable"></table></div>
         <div class="pagination" id="hsPagination"></div>
@@ -502,6 +506,7 @@
 <script src="data/a2_export_manifest.data.js"></script>
 <script src="data/points_hotspot1000.data.js"></script>
 <script src="data/points_safety799.data.js"></script>
+<script src="data/points_tech_enforcement.data.js"></script>
 <script src="data/geo_jump.data.js"></script>
 <script src="data/point_buffer_a1.data.js"></script>
 <script src="data/point_buffer_a2.data.js"></script>

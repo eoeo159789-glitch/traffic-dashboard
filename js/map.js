@@ -4,7 +4,7 @@
 // 另提供座標定位／縣市鄉鎮跳轉、自訂座標環域分析
 // ============================================================
 const MapView = (() => {
-  let map, clusterLayer, a1HeatLayer, a2HeatLayer, hotspotLayer, safety799Layer, customMarker, customCircle, customMultiLayer;
+  let map, clusterLayer, a1HeatLayer, a2HeatLayer, hotspotLayer, safety799Layer, techEnfLayer, customMarker, customCircle, customMultiLayer;
   const DEFAULT_POPUP_RADIUS = 200; // 點位彈窗預設顯示的環域半徑（公尺）
 
   function init() {
@@ -16,9 +16,10 @@ const MapView = (() => {
     clusterLayer = L.markerClusterGroup({ maxClusterRadius: 45, disableClusteringAtZoom: 16 });
     hotspotLayer = L.layerGroup();
     safety799Layer = L.layerGroup();
+    techEnfLayer = L.layerGroup();
     map.addLayer(clusterLayer);
 
-    ['showA1Toggle', 'a1HeatToggle', 'showA2Toggle', 'showHotspotToggle', 'showSafety799Toggle'].forEach(id => {
+    ['showA1Toggle', 'a1HeatToggle', 'showA2Toggle', 'showHotspotToggle', 'showSafety799Toggle', 'showTechEnfToggle'].forEach(id => {
       document.getElementById(id).addEventListener('change', () => render(State.filtered()));
     });
 
@@ -30,6 +31,7 @@ const MapView = (() => {
     const showA2 = document.getElementById('showA2Toggle').checked;
     const showHotspot = document.getElementById('showHotspotToggle').checked;
     const showSafety799 = document.getElementById('showSafety799Toggle').checked;
+    const showTechEnf = document.getElementById('showTechEnfToggle').checked;
     const legend = document.getElementById('mapLegend');
     let rows = '';
     if (showA1) {
@@ -48,6 +50,9 @@ const MapView = (() => {
     }
     if (showSafety799) {
       rows += `<div class="row"><span class="dot" style="background:#1baf7a;width:10px;height:10px;border-radius:2px;transform:rotate(45deg)"></span> 799 人行安全補助點位</div>`;
+    }
+    if (showTechEnf) {
+      rows += `<div class="row"><span class="dot" style="background:#e34948;width:10px;height:10px;border-radius:50%"></span> 科技執法設備位置（僅顯示有座標者）</div>`;
     }
     legend.innerHTML = rows || '<div class="row hint">未選擇任何圖層</div>';
   }
@@ -92,6 +97,24 @@ const MapView = (() => {
     });
   }
 
+  function renderTechEnfLayer() {
+    techEnfLayer.clearLayers();
+    State.techEnforcementPointsWithCoords().forEach(p => {
+      const marker = L.circleMarker([p.lat, p.lng], {
+        radius: 5, color: '#e34948', fillColor: '#e34948', fillOpacity: 0.85, weight: 1,
+      });
+      marker.bindPopup(`
+        <b>${p.county}${p.district || ''}</b>（${p.deviceType || '科技執法'}）<br>
+        ${p.loc || ''}<br>
+        取締項目：${p.items || '—'}<br>
+        速限：${p.speedLimit || '—'}／拍攝方向：${p.direction || '—'}<br>
+        管轄單位：${p.authority || '—'}<br>
+        ${bufferSummaryHtml(p.id)}
+      `);
+      techEnfLayer.addLayer(marker);
+    });
+  }
+
   function render(accidents) {
     if (!map) init();
     clusterLayer.clearLayers();
@@ -103,6 +126,7 @@ const MapView = (() => {
     const showA2 = document.getElementById('showA2Toggle').checked;
     const showHotspot = document.getElementById('showHotspotToggle').checked;
     const showSafety799 = document.getElementById('showSafety799Toggle').checked;
+    const showTechEnf = document.getElementById('showTechEnfToggle').checked;
     updateLegend();
 
     const note = document.getElementById('mapNote');
@@ -170,6 +194,16 @@ const MapView = (() => {
       notes.push(`人行安全補助點位：${State.safety799Points().length.toLocaleString()} 處`);
     } else if (map.hasLayer(safety799Layer)) {
       map.removeLayer(safety799Layer);
+    }
+
+    if (showTechEnf) {
+      if (techEnfLayer.getLayers().length === 0) renderTechEnfLayer();
+      if (!map.hasLayer(techEnfLayer)) techEnfLayer.addTo(map);
+      const withCoords = State.techEnforcementPointsWithCoords().length;
+      const total = State.techEnforcementPoints().length;
+      notes.push(`科技執法設備：${withCoords.toLocaleString()} 處有座標可顯示（原始清單共 ${total.toLocaleString()} 筆，其餘無座標僅列於「標案彙整」頁參考清單）`);
+    } else if (map.hasLayer(techEnfLayer)) {
+      map.removeLayer(techEnfLayer);
     }
 
     if (note) {

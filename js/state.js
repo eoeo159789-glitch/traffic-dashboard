@@ -133,7 +133,20 @@ const State = (() => {
   // 這兩份點位資料與環域統計不受側邊欄篩選影響（獨立資料集，有自己的分頁篩選）
   function hotspotPoints() { return window.POINTS_HOTSPOT1000 || []; }
   function safety799Points() { return window.POINTS_SAFETY799 || []; }
-  function pointsByDataset(key) { return key === 'safety799' ? safety799Points() : hotspotPoints(); }
+  // 科技執法設備地點：完整清單（含無座標者，供文字參考／表格展示），與僅有座標可上地圖／環域分析者
+  // 補上 township 別名（原始欄位為 district），讓熱點查詢／環域分析共用邏輯（p.township）可正常運作
+  let _techEnfCache = null;
+  function techEnforcementPoints() {
+    if (_techEnfCache) return _techEnfCache;
+    _techEnfCache = (window.POINTS_TECH_ENFORCEMENT || []).map(p => Object.assign({}, p, { township: p.district, name: p.loc }));
+    return _techEnfCache;
+  }
+  function techEnforcementPointsWithCoords() { return techEnforcementPoints().filter(p => p.hasCoords && p.lat != null && p.lng != null); }
+  function pointsByDataset(key) {
+    if (key === 'safety799') return safety799Points();
+    if (key === 'techEnforcement') return techEnforcementPointsWithCoords();
+    return hotspotPoints();
+  }
   function bufferA1For(pointId) { return (window.POINT_BUFFER_A1 || {})[pointId] || null; }
   function bufferA2For(pointId) { return (window.POINT_BUFFER_A2 || {})[pointId] || null; }
   function geoJump() { return window.GEO_JUMP || { counties: [], townships: [] }; }
@@ -213,7 +226,8 @@ const State = (() => {
     toggleInSet, setAll, resetAll, onChange, partiesFor,
     a2CrosstabFiltered, a2ByCountyFiltered, a2ByMonthFiltered, a2ByHourFiltered,
     a2AccTypeMinorFiltered, a2CauseMinorFiltered, a2GeoFiltered,
-    hotspotPoints, safety799Points, pointsByDataset, bufferA1For, bufferA2For, geoJump, customBufferStats,
+    hotspotPoints, safety799Points, techEnforcementPoints, techEnforcementPointsWithCoords,
+    pointsByDataset, bufferA1For, bufferA2For, geoJump, customBufferStats,
     pointStatsAtRadius, aggregateBufferStats,
   };
 })();

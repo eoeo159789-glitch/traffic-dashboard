@@ -24,6 +24,25 @@ const Hotspot = (() => {
         { key: 'lng', label: '經度' },
       ];
     }
+    if (dataset === 'techEnforcement') {
+      return [
+        { key: 'id', label: '編號' },
+        { key: 'county', label: '縣市' },
+        { key: 'district', label: '行政區' },
+        { key: 'deviceType', label: '科技執法種類' },
+        { key: 'loc', label: '設置地點' },
+        { key: 'items', label: '取締項目' },
+        { key: 'speedLimit', label: '速限' },
+        { key: 'authority', label: '管轄單位' },
+        { key: 'a1Count', label: 'A1件數(半徑內)', numeric: true },
+        { key: 'a1Deaths', label: 'A1死亡', numeric: true },
+        { key: 'a1Injuries', label: 'A1受傷', numeric: true },
+        { key: 'a2Count', label: 'A2件數(半徑內)', numeric: true },
+        { key: 'a2Injuries', label: 'A2受傷', numeric: true },
+        { key: 'lat', label: '緯度' },
+        { key: 'lng', label: '經度' },
+      ];
+    }
     return [
       { key: 'id', label: '編號' },
       { key: 'county', label: '縣市' },
@@ -63,7 +82,8 @@ const Hotspot = (() => {
     return withStats.filter(r => {
       if (hsState.county && r.county !== hsState.county) return false;
       if (!kw) return true;
-      const hay = [r.name, r.position, r.address, r.township].filter(Boolean).join(' ').toLowerCase();
+      const hay = [r.name, r.position, r.address, r.township, r.district, r.loc, r.items, r.deviceType]
+        .filter(Boolean).join(' ').toLowerCase();
       return hay.includes(kw);
     });
   }
@@ -145,7 +165,9 @@ const Hotspot = (() => {
     const cols = columnsFor(hsState.dataset);
     const rows = sortedRows(filteredRows());
     const csv = Util.toCsv(rows, cols);
-    const label = hsState.dataset === 'safety799' ? '人行安全補助799處' : '易肇事路口1000處';
+    const label = hsState.dataset === 'safety799' ? '人行安全補助799處'
+      : hsState.dataset === 'techEnforcement' ? '科技執法設備地點'
+      : '易肇事路口1000處';
     Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${label}_半徑${hsState.radius}m環域統計_${Date.now()}.csv`);
   }
 

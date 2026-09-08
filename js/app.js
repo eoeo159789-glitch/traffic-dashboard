@@ -413,6 +413,17 @@
           { key: 'position', label: '路口位置' },
           { key: 'address', label: '完整地址' },
         ]
+      : dataset === 'techEnforcement'
+      ? [
+          { key: 'id', label: '編號' },
+          { key: 'county', label: '縣市' },
+          { key: 'township', label: '行政區' },
+          { key: 'deviceType', label: '科技執法種類' },
+          { key: 'loc', label: '設置地點' },
+          { key: 'items', label: '取締項目' },
+          { key: 'speedLimit', label: '速限' },
+          { key: 'authority', label: '管轄單位' },
+        ]
       : [
           { key: 'id', label: '編號' },
           { key: 'county', label: '縣市' },
@@ -569,7 +580,9 @@
       });
       const cols = hpColumnsFor(dataset);
       const csv = Util.toCsv(rows, cols);
-      const label = dataset === 'safety799' ? '人行安全補助799處' : '易肇事路口1000處';
+      const label = dataset === 'safety799' ? '人行安全補助799處'
+        : dataset === 'techEnforcement' ? '科技執法設備地點'
+        : '易肇事路口1000處';
       const scope = [countySel.value, townshipSel.value].filter(Boolean).join('') || '全部';
       Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${label}_${scope}_半徑${radius}m環域統計_${Date.now()}.csv`);
     });

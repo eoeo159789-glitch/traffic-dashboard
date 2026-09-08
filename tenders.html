@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>六都及全國交通標案分類彙整</title>
+<style>
+:root{
+  --bg:#eef1ee;
+  --surface:#ffffff;
+  --surface-alt:#e4e9e4;
+  --ink:#1b2a2c;
+  --ink-soft:#516059;
+  --line:#c9d1c8;
+  --accent:#b23a2e;
+  --accent-soft:#f1ddd8;
+  --accent-ink:#8c2c22;
+  --gold:#8a6a26;
+  --gold-soft:#efe6cf;
+  --focus:#2f6d5e;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11181a;
+    --surface:#182122;
+    --surface-alt:#1f2a2b;
+    --ink:#e7ede9;
+    --ink-soft:#a2b3ab;
+    --line:#33413f;
+    --accent:#e2786a;
+    --accent-soft:#3a2622;
+    --accent-ink:#f0a598;
+    --gold:#d3b06a;
+    --gold-soft:#3a331f;
+    --focus:#7fc9ae;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11181a;
+  --surface:#182122;
+  --surface-alt:#1f2a2b;
+  --ink:#e7ede9;
+  --ink-soft:#a2b3ab;
+  --line:#33413f;
+  --accent:#e2786a;
+  --accent-soft:#3a2622;
+  --accent-ink:#f0a598;
+  --gold:#d3b06a;
+  --gold-soft:#3a331f;
+  --focus:#7fc9ae;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
+  line-height:1.7;
+  font-size:15.5px;
+}
+.wrap{
+  max-width:1180px;
+  margin:0 auto;
+  padding:48px 24px 80px;
+}
+header{
+  margin-bottom:36px;
+  padding-bottom:28px;
+  border-bottom:1px solid var(--line);
+  display:flex;
+  flex-wrap:wrap;
+  gap:20px;
+  align-items:flex-end;
+  justify-content:space-between;
+}
+.header-main{flex:1 1 420px;}
+.eyebrow{
+  display:inline-block;
+  font-size:12px;
+  letter-spacing:.14em;
+  color:var(--gold);
+  background:var(--gold-soft);
+  padding:4px 10px;
+  border-radius:3px;
+  margin-bottom:16px;
+  font-weight:700;
+}
+h1{
+  font-family:"Noto Serif TC",serif;
+  font-weight:900;
+  font-size:clamp(28px,4.4vw,40px);
+  margin:0 0 14px;
+  text-wrap:balance;
+  letter-spacing:.01em;
+}
+.lede{color:var(--ink-soft);font-size:16px;max-width:66ch;margin:0;}
+.meta{margin-top:18px;font-size:13px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+.header-nav{display:flex;gap:10px;flex-wrap:wrap;}
+.nav-link{
+  display:inline-flex;align-items:center;gap:6px;
+  color:var(--focus);background:var(--surface);border:1px solid var(--line);
+  padding:7px 13px;border-radius:6px;font-size:13.5px;font-weight:700;text-decoration:none;white-space:nowrap;
+}
+.nav-link:hover{border-color:var(--focus);}
+
+.callout{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-left:4px solid var(--accent);
+  border-radius:6px;
+  padding:20px 22px;
+  margin:0 0 24px;
+}
+.callout h2{font-family:"Noto Serif TC",serif;font-size:16px;margin:0 0 10px;color:var(--accent-ink);}
+.callout ul{margin:0;padding-left:1.2em;}
+.callout li{margin-bottom:6px;}
+.callout li:last-child{margin-bottom:0;}
+.callout p{margin:0 0 8px;}
+.callout p:last-child{margin-bottom:0;}
+
+section.group{margin-bottom:40px;}
+.group-head{
+  display:flex;align-items:baseline;gap:10px;margin-bottom:14px;padding-bottom:8px;
+  border-bottom:2px solid var(--line);flex-wrap:wrap;
+}
+.group-head h2{font-family:"Noto Serif TC",serif;font-size:20px;margin:0;font-weight:700;}
+.group-head .count{
+  font-size:13px;color:var(--gold);font-weight:700;background:var(--gold-soft);
+  padding:2px 9px;border-radius:20px;font-variant-numeric:tabular-nums;
+}
+.group-note{font-size:13px;color:var(--ink-soft);margin-left:auto;}
+
+.table-scroll{overflow-x:auto;}
+table{
+  width:100%;border-collapse:collapse;background:var(--surface);
+  border:1px solid var(--line);border-radius:6px;overflow:hidden;
+}
+th{
+  text-align:left;font-size:12.5px;letter-spacing:.02em;color:var(--ink-soft);font-weight:700;
+  padding:9px 12px;background:var(--surface-alt);border-bottom:1px solid var(--line);white-space:nowrap;
+}
+th.sortable{cursor:pointer;user-select:none;}
+th.sortable:hover{color:var(--ink);}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13.5px;}
+tr:last-child td{border-bottom:none;}
+tr:nth-child(even) td{background:color-mix(in srgb, var(--surface-alt) 35%, transparent);}
+.amt{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;}
+.city{font-weight:700;white-space:nowrap;}
+.note{color:var(--ink-soft);font-size:12.5px;}
+.src-note{font-size:12.5px;color:var(--ink-soft);margin-top:12px;}
+.badge{
+  font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;display:inline-block;
+}
+.badge.rel{color:var(--focus);background:color-mix(in srgb, var(--focus) 16%, transparent);}
+.badge.excl{color:var(--ink-soft);background:var(--surface-alt);}
+.badge.cat{color:var(--accent-ink);background:var(--accent-soft);}
+
+.panel{
+  background:var(--surface);border:1px solid var(--line);border-radius:8px;
+  padding:18px 20px;margin-bottom:16px;
+}
+.filter-row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:10px;}
+.filter-row:last-child{margin-bottom:0;}
+.filter-row label{font-size:13px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;}
+select,input[type="text"],input[type="search"],input[type="number"]{
+  font-family:inherit;font-size:13.5px;padding:6px 9px;border-radius:5px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink);
+}
+input[type="search"]{min-width:220px;}
+.chip{
+  display:inline-flex;align-items:center;gap:5px;font-size:13px;padding:5px 11px;border-radius:20px;
+  border:1px solid var(--line);background:var(--bg);cursor:pointer;user-select:none;
+}
+.chip input{margin:0;}
+.chip.active{border-color:var(--focus);color:var(--focus);background:color-mix(in srgb, var(--focus) 10%, transparent);}
+.btn{
+  font-family:inherit;font-size:13.5px;font-weight:700;padding:7px 14px;border-radius:6px;
+  border:1px solid var(--line);background:var(--surface-alt);color:var(--ink);cursor:pointer;
+}
+.btn:hover{border-color:var(--focus);}
+.btn.primary{background:var(--focus);color:#fff;border-color:var(--focus);}
+.summary-line{font-size:13.5px;color:var(--ink-soft);margin:10px 0;}
+.summary-line b{color:var(--ink);font-variant-numeric:tabular-nums;}
+.pagination{display:flex;align-items:center;gap:12px;margin-top:12px;font-size:13.5px;color:var(--ink-soft);}
+.detail-row td{background:var(--surface-alt) !important;font-size:13px;color:var(--ink-soft);}
+.detail-row .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 20px;}
+.detail-grid div b{color:var(--ink);font-weight:700;}
+tr.record-row{cursor:pointer;}
+tr.record-row:hover td{background:color-mix(in srgb, var(--focus) 8%, transparent) !important;}
+.loading{padding:40px;text-align:center;color:var(--ink-soft);}
+
+footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);}
+footer p{margin:0 0 8px;}
+
+@media (max-width:640px){
+  .group-note{display:none;}
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="header-main">
+      <span class="eyebrow">政府採購 · 標案彙整</span>
+      <h1>六都及全國交通標案分類彙整</h1>
+      <p class="lede">彙整全國政府電子採購網「科技執法」「標誌標線」「人行道」「道路工程」「道路改善」「拓寬工程」六大類交通安全相關標案，並以實際履約地點比對至縣市，供交叉比對前述道路安全審計議題（經費配置、科技執法設備布建優先順序等）使用。</p>
+      <p class="meta" id="metaLine">載入中…</p>
+    </div>
+    <div class="header-nav">
+      <a class="nav-link" href="index.html">🚦 交通事故分析平台</a>
+      <a class="nav-link" href="budget.html">🗺️ 決算地圖</a>
+    </div>
+  </header>
+
+  <div class="callout">
+    <h2>使用前請注意（資料性質與限制）</h2>
+    <ul>
+      <li>本資料來源為使用者以關鍵字查詢政府電子採購網匯出之標案清單（涵蓋 110/01/01～115/09/08），反映的是「標題含特定關鍵字」的標案，<strong>並非該縣市／機關的實際總支出</strong>——許多工程標案僅以路名／路段命名、未含檢索關鍵字，本資料無法涵蓋，屬於「至少有這麼多」的下限，不宜直接引用為政策總額。</li>
+      <li><strong>跨類別重複已處理</strong>：6 個類別間共 153 筆決標記錄同時被 2 個以上類別的關鍵字搜尋抓到（主要是「科技執法」與「標誌標線」間 78 筆），各類別自己的資料與彙總表數字維持原始搜尋結果不變，但下方「總覽比較表」「各縣市標案金額總表」等跨類別加總表格已排除重複計算。</li>
+      <li><strong>履約地點比對率</strong>：標誌標線 98.7%、人行道 99.0%、道路工程 100%、道路改善 99.5%、科技執法 96.3%，惟<strong>拓寬工程僅 46.2%</strong>（新增的履約地點資料未完整涵蓋此類別），查無比對結果者「履約地點-縣市」留空，使用該類別的縣市分布數字時請留意此落差。</li>
+      <li>「與道路交通安全相關性」欄位為規則式（關鍵字比對）判定並人工複核，用以排除環保機關空污監測、農業產業道路、國營事業內部場地等非交通安全用途的同名標案，屬於第一輪篩選，可能仍有少數誤判。</li>
+      <li><strong>重大異常提醒</strong>：「科技執法」類別中央機關財物類金額約 121 億元，其中 118 億元集中在「臺灣銀行股份有限公司」名下 4 筆標案，臺灣銀行本身非交通執法機關，極可能是全國性共同供應契約框架總額（代表全國多個地方政府統一招標），而非單一機關實際支出，解讀中央機關科技執法金額時請務必留意此筆異常值。</li>
+    </ul>
+  </div>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>總覽比較表：各機關所屬地區 × 六大類別</h2>
+      <span class="count" id="overviewCount">—</span>
+      <span class="group-note">僅計入判定為「相關」之標案，跨類別重複已排除</span>
+    </div>
+    <div class="table-scroll"><table id="overviewTable"><tbody><tr><td class="loading">載入中…</td></tr></tbody></table></div>
+    <p class="src-note">金額單位：新台幣元（決標金額）。點欄名不可排序，本表為原始彙整結果全表呈現。</p>
+  </section>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>各縣市標案金額總表（依履約地點）</h2>
+      <span class="count" id="byCountyCount">—</span>
+      <span class="group-note">不分中央或地方機關，依實際施工/建置地點彙總</span>
+    </div>
+    <div class="table-scroll"><table id="byCountyTable"><tbody><tr><td class="loading">載入中…</td></tr></tbody></table></div>
+  </section>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>中央機關標案地區分布</h2>
+      <span class="count" id="byRegionCount">—</span>
+      <span class="group-note">僅中央機關標案，依履約地點分類（可判定率約90%）</span>
+    </div>
+    <div class="table-scroll"><table id="byRegionTable"><tbody><tr><td class="loading">載入中…</td></tr></tbody></table></div>
+  </section>
+
+  <section class="group">
+    <div class="group-head">
+      <h2>互動查詢：全部標案逐筆資料</h2>
+      <span class="count" id="recordCountBadge">—</span>
+      <span class="group-note">可依分類、縣市、關鍵字、年度、相關性篩選；點列可展開詳細資訊</span>
+    </div>
+
+    <div class="panel">
+      <div class="filter-row" id="categoryChips"></div>
+      <div class="filter-row">
+        <label>履約地點縣市
+          <select id="fCounty"><option value="">全部縣市</option></select>
+        </label>
+        <label>機關所屬地區
+          <select id="fRegion"><option value="">全部地區</option></select>
+        </label>
+        <label>決標年度(民國)
+          <select id="fYear"><option value="">全部年度</option></select>
+        </label>
+        <label>相關性
+          <select id="fRelevance">
+            <option value="相關" selected>僅顯示「相關」</option>
+            <option value="">全部（含不相關）</option>
+            <option value="不相關">僅顯示「不相關」</option>
+          </select>
+        </label>
+        <label>受機關補助
+          <select id="fSubsidized">
+            <option value="">不限</option>
+            <option value="是">是</option>
+            <option value="否">否</option>
+          </select>
+        </label>
+        <input type="search" id="fKeyword" placeholder="搜尋機關名稱／標案名稱關鍵字">
+        <button class="btn" id="fReset">↺ 重設篩選</button>
+        <button class="btn primary" id="fExport">⭳ 匯出目前篩選結果 CSV</button>
+      </div>
+    </div>
+
+    <div class="summary-line" id="filterSummary"></div>
+    <div class="table-scroll"><table id="recordsTable">
+      <thead><tr>
+        <th class="sortable" data-key="category">分類</th>
+        <th class="sortable" data-key="agency">機關名稱</th>
+        <th class="sortable" data-key="title">標案名稱</th>
+        <th class="sortable" data-key="awardDate">決標日期</th>
+        <th class="sortable" data-key="totalAmount">總決標金額</th>
+        <th class="sortable" data-key="performLocCounty">履約地點縣市</th>
+        <th class="sortable" data-key="region">機關所屬地區</th>
+        <th class="sortable" data-key="relevance">相關性</th>
+      </tr></thead>
+      <tbody id="recordsBody"><tr><td colspan="8" class="loading">載入中…</td></tr></tbody>
+    </table></div>
+    <div class="pagination" id="pagination"></div>
+  </section>
+
+  <footer>
+    <p>資料來源：政府電子採購網關鍵字查詢匯出結果，經人工分類、去重、履約地點比對後彙整；完整分類規則、排除規則與各項限制說明詳見上方「使用前請注意」及「研究團隊自建全國道路交通事故資料整合分析平台」相關文件。</p>
+    <p>本頁資料與「「路」有鋪，「安」有顧？——道路之安全審計」報告、「台灣決算地圖」（<a href="budget.html">budget.html</a>）互為對照材料，建議搭配「交通事故分析平台」（<a href="index.html">index.html</a>）之科技執法環域分析一併檢視科技執法設備布建與事故熱區的對應關係。</p>
+  </footer>
+
+</div>
+
+<script src="data/tenders.data.js"></script>
+<script>
+(function(){
+  var D = window.TENDERS;
+  if (!D) {
+    document.getElementById('metaLine').textContent = '資料載入失敗：找不到 data/tenders.data.js，請確認已執行 scripts/build_tenders.py。';
+    return;
+  }
+
+  function fmtNum(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : Number(n).toLocaleString('zh-Hant'); }
+  function fmtAmt(n){ return (n===null||n===undefined) ? '—' : Number(n).toLocaleString('zh-Hant'); }
+
+  document.getElementById('metaLine').textContent =
+    '彙整時間：2026年9月 · 涵蓋 110/01/01～115/09/08 決標案件 · 共 ' + fmtNum(D.meta.recordCount) + ' 筆標案記錄（6大類別，未去除跨類別重複前）';
+
+  // ---- 通用：把 array-of-object（欄名為原始中文表頭）畫成表格 ----
+  function renderGenericTable(tableId, rows, countId) {
+    var table = document.getElementById(tableId);
+    if (!rows || !rows.length) { table.querySelector('tbody').innerHTML = '<tr><td class="loading">無資料</td></tr>'; return; }
+    var cols = Object.keys(rows[0]);
+    var thead = '<thead><tr>' + cols.map(function(c){ return '<th>' + c + '</th>'; }).join('') + '</tr></thead>';
+    var tbody = '<tbody>' + rows.map(function(r){
+      return '<tr>' + cols.map(function(c){
+        var v = r[c];
+        var isAmt = /金額/.test(c);
+        var isNum = typeof v === 'number';
+        var cls = isAmt ? 'amt' : (isNum ? 'num' : '');
+        var disp = isAmt ? fmtAmt(v) : (isNum ? fmtNum(v) : (v == null ? '—' : v));
+        var cityCls = (c.indexOf('地區') >= 0 || c.indexOf('縣市') >= 0) ? ' class="city ' + cls + '"' : (cls ? ' class="' + cls + '"' : '');
+        return '<td' + cityCls + '>' + disp + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+    table.innerHTML = thead + tbody;
+    if (countId) document.getElementById(countId).textContent = rows.length + ' 列';
+  }
+
+  renderGenericTable('overviewTable', D.overview, 'overviewCount');
+  renderGenericTable('byCountyTable', D.byCounty, 'byCountyCount');
+  renderGenericTable('byRegionTable', D.byRegionCentral, 'byRegionCount');
+
+  // ---- 互動查詢：逐筆標案資料 ----
+  var records = D.records || [];
+  document.getElementById('recordCountBadge').textContent = fmtNum(records.length) + ' 筆';
+
+  var counties = Array.from(new Set(records.map(function(r){ return r.performLocCounty; }).filter(Boolean))).sort(function(a,b){ return a.localeCompare(b,'zh-Hant'); });
+  var regions = Array.from(new Set(records.map(function(r){ return r.region; }).filter(Boolean))).sort(function(a,b){ return a.localeCompare(b,'zh-Hant'); });
+  var years = Array.from(new Set(records.map(function(r){ return r.awardYear; }).filter(function(y){ return y != null; }))).sort(function(a,b){ return a-b; });
+
+  document.getElementById('fCounty').innerHTML += counties.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+  document.getElementById('fRegion').innerHTML += regions.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+  document.getElementById('fYear').innerHTML += years.map(function(y){ return '<option value="'+y+'">民國'+y+'年</option>'; }).join('');
+
+  var activeCats = new Set(D.meta.categories);
+  var catChipsEl = document.getElementById('categoryChips');
+  catChipsEl.innerHTML = D.meta.categories.map(function(c){
+    return '<span class="chip active" data-cat="'+c+'">✓ '+c+'</span>';
+  }).join('');
+  catChipsEl.querySelectorAll('.chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      var cat = chip.dataset.cat;
+      if (activeCats.has(cat)) {
+        activeCats.delete(cat); chip.classList.remove('active'); chip.textContent = '　' + cat;
+      } else {
+        activeCats.add(cat); chip.classList.add('active'); chip.textContent = '✓ ' + cat;
+      }
+      state.page = 1; render();
+    });
+  });
+
+  var state = { page: 1, pageSize: 50, sortKey: null, sortDir: 1 };
+  var PAGE_SIZE = 50;
+
+  function filtered() {
+    var county = document.getElementById('fCounty').value;
+    var region = document.getElementById('fRegion').value;
+    var year = document.getElementById('fYear').value;
+    var relevance = document.getElementById('fRelevance').value;
+    var subsidized = document.getElementById('fSubsidized').value;
+    var kw = document.getElementById('fKeyword').value.trim().toLowerCase();
+    return records.filter(function(r){
+      if (!activeCats.has(r.category)) return false;
+      if (county && r.performLocCounty !== county) return false;
+      if (region && r.region !== region) return false;
+      if (year && String(r.awardYear) !== year) return false;
+      if (relevance && r.relevance !== relevance) return false;
+      if (subsidized && r.subsidized !== subsidized) return false;
+      if (kw) {
+        var hay = ((r.agency||'') + ' ' + (r.title||'')).toLowerCase();
+        if (hay.indexOf(kw) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function sortRows(rows) {
+    if (!state.sortKey) return rows;
+    var k = state.sortKey, dir = state.sortDir;
+    return rows.slice().sort(function(a,b){
+      var av = a[k], bv = b[k];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), 'zh-Hant') * dir;
+    });
+  }
+
+  function detailHtml(r) {
+    var fields = [
+      ['標案案號', r.tenderNo], ['決標方式', r.awardMethod], ['預算金額', fmtAmt(r.budget)],
+      ['底價金額', fmtAmt(r.baseAmount)], ['標比(%)', r.bidRatio], ['標的分類', r.targetType],
+      ['標的分類代碼與名稱', r.targetCode], ['招標方式', r.biddingMethod], ['採購金額級距', r.amountTier],
+      ['是否受機關補助', r.subsidized], ['補助機關名稱', r.subsidyAgency], ['補助金額', fmtAmt(r.subsidyAmount)],
+      ['決標公告日期', r.awardAnnounceDate], ['政府層級', r.govLevel],
+      ['履約地點(原始)', r.performLocRaw], ['排除原因(不相關時)', r.excludeReason],
+      ['中央機關標題推定施工縣市', r.titleGuessCounty], ['跨類別重複標記', r.crossCategoryDup],
+    ];
+    return '<div class="detail-grid">' + fields.map(function(f){
+      return '<div><b>' + f[0] + '：</b>' + (f[1] == null || f[1] === '' ? '—' : f[1]) + '</div>';
+    }).join('') + '</div>';
+  }
+
+  var openDetailIdx = null;
+
+  function render() {
+    var rows = sortRows(filtered());
+    document.getElementById('filterSummary').innerHTML =
+      '符合條件共 <b>' + fmtNum(rows.length) + '</b> 筆（總決標金額合計 <b>' + fmtAmt(rows.reduce(function(s,r){ return s + (r.totalAmount||0); }, 0)) + '</b> 元）';
+
+    var totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    if (state.page > totalPages) state.page = totalPages;
+    var start = (state.page - 1) * PAGE_SIZE;
+    var pageRows = rows.slice(start, start + PAGE_SIZE);
+
+    var thead = document.querySelector('#recordsTable thead tr');
+    thead.querySelectorAll('th').forEach(function(th){
+      var active = state.sortKey === th.dataset.key;
+      var base = th.textContent.replace(/ ▲| ▼/, '');
+      th.textContent = base + (active ? (state.sortDir === 1 ? ' ▲' : ' ▼') : '');
+    });
+
+    var body = document.getElementById('recordsBody');
+    if (!pageRows.length) {
+      body.innerHTML = '<tr><td colspan="8" class="loading">沒有符合條件的標案</td></tr>';
+    } else {
+      body.innerHTML = pageRows.map(function(r, i){
+        var idx = start + i;
+        var relBadge = r.relevance === '相關' ? '<span class="badge rel">相關</span>' : '<span class="badge excl">不相關</span>';
+        var row = '<tr class="record-row" data-idx="' + idx + '">' +
+          '<td><span class="badge cat">' + (r.category||'') + '</span></td>' +
+          '<td>' + (r.agency||'—') + '</td>' +
+          '<td>' + (r.title||'—') + '</td>' +
+          '<td class="num">' + (r.awardDate||'—') + '</td>' +
+          '<td class="amt">' + fmtAmt(r.totalAmount) + '</td>' +
+          '<td class="city">' + (r.performLocCounty||'—') + '</td>' +
+          '<td>' + (r.region||'—') + '</td>' +
+          '<td>' + relBadge + '</td>' +
+        '</tr>';
+        if (openDetailIdx === idx) {
+          row += '<tr class="detail-row"><td colspan="8">' + detailHtml(r) + '</td></tr>';
+        }
+        return row;
+      }).join('');
+      body.querySelectorAll('tr.record-row').forEach(function(tr){
+        tr.addEventListener('click', function(){
+          var idx = Number(tr.dataset.idx);
+          openDetailIdx = (openDetailIdx === idx) ? null : idx;
+          render();
+        });
+      });
+    }
+
+    document.getElementById('pagination').innerHTML =
+      '<button class="btn" id="pgPrev" ' + (state.page<=1?'disabled':'') + '>← 上一頁</button>' +
+      '<span>第 ' + state.page + ' / ' + totalPages + ' 頁（共 ' + fmtNum(rows.length) + ' 筆）</span>' +
+      '<button class="btn" id="pgNext" ' + (state.page>=totalPages?'disabled':'') + '>下一頁 →</button>';
+    var prev = document.getElementById('pgPrev'), next = document.getElementById('pgNext');
+    if (prev) prev.onclick = function(){ state.page--; openDetailIdx=null; render(); };
+    if (next) next.onclick = function(){ state.page++; openDetailIdx=null; render(); };
+  }
+
+  thead_click: {
+    document.querySelectorAll('#recordsTable thead th.sortable').forEach(function(th){
+      th.addEventListener('click', function(){
+        var key = th.dataset.key;
+        if (state.sortKey === key) state.sortDir *= -1;
+        else { state.sortKey = key; state.sortDir = 1; }
+        render();
+      });
+    });
+  }
+
+  ['fCounty','fRegion','fYear','fRelevance','fSubsidized'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', function(){ state.page = 1; openDetailIdx = null; render(); });
+  });
+  document.getElementById('fKeyword').addEventListener('input', function(){ state.page = 1; openDetailIdx = null; render(); });
+  document.getElementById('fReset').addEventListener('click', function(){
+    document.getElementById('fCounty').value = '';
+    document.getElementById('fRegion').value = '';
+    document.getElementById('fYear').value = '';
+    document.getElementById('fRelevance').value = '相關';
+    document.getElementById('fSubsidized').value = '';
+    document.getElementById('fKeyword').value = '';
+    activeCats = new Set(D.meta.categories);
+    catChipsEl.querySelectorAll('.chip').forEach(function(c){ c.classList.add('active'); c.textContent = '✓ ' + c.dataset.cat; });
+    state.page = 1; state.sortKey = null; openDetailIdx = null;
+    render();
+  });
+
+  function toCsv(rows) {
+    var cols = [
+      ['category','分類'], ['agency','機關名稱'], ['tenderNo','標案案號'], ['title','標案名稱'],
+      ['awardMethod','決標方式'], ['budget','預算金額'], ['totalAmount','總決標金額'], ['awardDate','決標日期'],
+      ['region','機關所屬地區'], ['govLevel','政府層級'], ['awardYear','決標年度(民國)'],
+      ['performLocCounty','履約地點縣市'], ['relevance','相關性'], ['subsidized','是否受機關補助'], ['subsidyAmount','補助金額'],
+    ];
+    function esc(v){
+      if (v === null || v === undefined) return '';
+      var s = String(v);
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+      return s;
+    }
+    var header = cols.map(function(c){ return esc(c[1]); }).join(',');
+    var lines = rows.map(function(r){ return cols.map(function(c){ return esc(r[c[0]]); }).join(','); });
+    return '﻿' + [header].concat(lines).join('\r\n');
+  }
+
+  document.getElementById('fExport').addEventListener('click', function(){
+    var rows = sortRows(filtered());
+    var csv = toCsv(rows);
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = '交通標案篩選結果_' + Date.now() + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
