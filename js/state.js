@@ -135,10 +135,18 @@ const State = (() => {
   function safety799Points() { return window.POINTS_SAFETY799 || []; }
   // 科技執法設備地點：完整清單（含無座標者，供文字參考／表格展示），與僅有座標可上地圖／環域分析者
   // 補上 township 別名（原始欄位為 district），讓熱點查詢／環域分析共用邏輯（p.township）可正常運作
+  const COORD_SOURCE_LABEL = {
+    official: '官方座標',
+    estimated_high: '推估座標-較高信心',
+    estimated_low: '推估座標-低信心（僅供參考）',
+  };
   let _techEnfCache = null;
   function techEnforcementPoints() {
     if (_techEnfCache) return _techEnfCache;
-    _techEnfCache = (window.POINTS_TECH_ENFORCEMENT || []).map(p => Object.assign({}, p, { township: p.district, name: p.loc }));
+    _techEnfCache = (window.POINTS_TECH_ENFORCEMENT || []).map(p => Object.assign({}, p, {
+      township: p.district, name: p.loc,
+      coordSourceLabel: p.hasCoords ? (COORD_SOURCE_LABEL[p.coordSource] || '官方座標') : '',
+    }));
     return _techEnfCache;
   }
   function techEnforcementPointsWithCoords() { return techEnforcementPoints().filter(p => p.hasCoords && p.lat != null && p.lng != null); }

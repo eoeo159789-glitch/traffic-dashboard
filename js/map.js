@@ -52,7 +52,11 @@ const MapView = (() => {
       rows += `<div class="row"><span class="dot" style="background:#1baf7a;width:10px;height:10px;border-radius:2px;transform:rotate(45deg)"></span> 799 人行安全補助點位</div>`;
     }
     if (showTechEnf) {
-      rows += `<div class="row"><span class="dot" style="background:#e34948;width:10px;height:10px;border-radius:50%"></span> 科技執法設備位置（僅顯示有座標者）</div>`;
+      rows += `
+        <div class="row"><span class="dot" style="background:#e34948;width:10px;height:10px;border-radius:50%"></span> 科技執法設備－官方座標</div>
+        <div class="row"><span class="dot" style="background:#f2a541;width:10px;height:10px;border-radius:50%"></span> 科技執法設備－推估座標（較高信心）</div>
+        <div class="row"><span class="dot" style="background:#9a9a9a;width:9px;height:9px;border-radius:50%;opacity:.75"></span> 科技執法設備－推估座標（低信心，僅供概略參考）</div>
+      `;
     }
     legend.innerHTML = rows || '<div class="row hint">未選擇任何圖層</div>';
   }
@@ -97,18 +101,34 @@ const MapView = (() => {
     });
   }
 
+  const TECH_ENF_STYLE = {
+    official: { color: '#e34948', radius: 5, fillOpacity: 0.85 },
+    estimated_high: { color: '#f2a541', radius: 5, fillOpacity: 0.85 },
+    estimated_low: { color: '#9a9a9a', radius: 4, fillOpacity: 0.6 },
+  };
+  const COORD_SOURCE_LABEL = {
+    official: '官方座標',
+    estimated_high: '推估座標（較高信心）',
+    estimated_low: '推估座標（低信心，僅供概略參考，誤差可能達數百公尺以上）',
+  };
   function renderTechEnfLayer() {
     techEnfLayer.clearLayers();
     State.techEnforcementPointsWithCoords().forEach(p => {
+      const src = p.coordSource || 'official';
+      const style = TECH_ENF_STYLE[src] || TECH_ENF_STYLE.official;
       const marker = L.circleMarker([p.lat, p.lng], {
-        radius: 5, color: '#e34948', fillColor: '#e34948', fillOpacity: 0.85, weight: 1,
+        radius: style.radius, color: style.color, fillColor: style.color, fillOpacity: style.fillOpacity, weight: 1,
       });
+      const coordLine = src === 'official'
+        ? '座標來源：官方公告清單'
+        : `座標來源：${COORD_SOURCE_LABEL[src]}（定位方法：${p.geocodeMethod || '—'}${p.geocodeQuality ? '／' + p.geocodeQuality : ''}）`;
       marker.bindPopup(`
         <b>${p.county}${p.district || ''}</b>（${p.deviceType || '科技執法'}）<br>
         ${p.loc || ''}<br>
         取締項目：${p.items || '—'}<br>
         速限：${p.speedLimit || '—'}／拍攝方向：${p.direction || '—'}<br>
         管轄單位：${p.authority || '—'}<br>
+        <span style="color:${src === 'official' ? '#555' : style.color}">${coordLine}</span><br>
         ${bufferSummaryHtml(p.id)}
       `);
       techEnfLayer.addLayer(marker);
@@ -199,9 +219,12 @@ const MapView = (() => {
     if (showTechEnf) {
       if (techEnfLayer.getLayers().length === 0) renderTechEnfLayer();
       if (!map.hasLayer(techEnfLayer)) techEnfLayer.addTo(map);
-      const withCoords = State.techEnforcementPointsWithCoords().length;
+      const withCoordsPts = State.techEnforcementPointsWithCoords();
       const total = State.techEnforcementPoints().length;
-      notes.push(`科技執法設備：${withCoords.toLocaleString()} 處有座標可顯示（原始清單共 ${total.toLocaleString()} 筆，其餘無座標僅列於「標案彙整」頁參考清單）`);
+      const nOfficial = withCoordsPts.filter(p => (p.coordSource || 'official') === 'official').length;
+      const nHigh = withCoordsPts.filter(p => p.coordSource === 'estimated_high').length;
+      const nLow = withCoordsPts.filter(p => p.coordSource === 'estimated_low').length;
+      notes.push(`科技執法設備：官方座標 ${nOfficial.toLocaleString()} 處＋推估座標-較高信心 ${nHigh.toLocaleString()} 處＋推估座標-低信心 ${nLow.toLocaleString()} 處，合計 ${withCoordsPts.length.toLocaleString()} 處可顯示（原始清單共 ${total.toLocaleString()} 筆；報告正式分析僅採官方座標941處為基礎，推估座標詳見報告第三章第五節）`);
     } else if (map.hasLayer(techEnfLayer)) {
       map.removeLayer(techEnfLayer);
     }

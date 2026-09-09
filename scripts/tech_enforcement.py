@@ -301,7 +301,7 @@ def load_tech_enforcement(raw_dir):
                     if c in h:
                         return i
             return None
-        i_loc = find_col("設置地點", "地點")
+        i_loc = find_col("設置地點", "設置位置", "地點", "位置")
         i_items = find_col("取締項目")
         i_lat = find_col("緯度")
         i_lng = find_col("經度")

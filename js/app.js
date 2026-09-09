@@ -424,6 +424,7 @@
           { key: 'items', label: '取締項目' },
           { key: 'speedLimit', label: '速限' },
           { key: 'authority', label: '管轄單位' },
+          { key: 'coordSourceLabel', label: '座標來源' },
         ]
       : [
           { key: 'id', label: '編號' },
