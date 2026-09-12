@@ -556,11 +556,11 @@ table.data-table tbody tr:hover { background: var(--page-plane); }
 .wl-status-select { font-size: 12px; padding: 3px 4px; }
 .audit-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
 .mini-count { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
-/* 稽核工作站表格中的長文字欄位（說明／摘要）需要換行，覆蓋 .data-table 預設的 white-space:nowrap */
-#auditAnomalyTable td:nth-child(5),
+/* 稽核工作站表格中的長文字欄位（說明／摘要／相關子標籤／依據）需要換行，覆蓋 .data-table 預設的 white-space:nowrap */
+#auditAnomalyTable td:nth-child(6),
 #auditWatchlistTable td:nth-child(4),
-#auditCrossCheckTable td:nth-child(4),
-#auditCrossCheckTable td:nth-child(7) {
+#auditCrossCheckTable td:nth-child(3),
+#auditCrossCheckTable td:nth-child(6) {
   white-space: normal;
   word-break: break-word;
   max-width: 460px;

@@ -9,17 +9,27 @@
 //   - 年增率異常：只在「年度相鄰」（例如 2024→2025）且「前一年數值不為 0」時
 //     計算年增率，再對「全部縣市 × 全部年度」的年增率分布算 z 分數；
 //     |z| 越大代表該縣市當年度的變化幅度，相對其他縣市/年度而言越不尋常。
+//     -- 但單一指標的年增率異常，本身不足以判斷「好壞」（例如罰鍰收入變多，
+//     可能是執法更積極，也可能只是統計波動）。因此「舉發總件數」與「罰鍰收入」
+//     這兩項，會再對照「同縣市、同年度」的 A1 事故件數年增率：如果數值上升
+//     但事故並未同步改善（甚至惡化），才會提高嚴重度；如果數值上升但事故已
+//     同步改善，會調降嚴重度並標註原因。A1 事故件數年增率本身就是安全成效
+//     指標，不需要再對照其他指標。
 //   - 標案金額離群值：同一個標案分類內，先取金額的自然對數（降低金額本身
-//     右偏分布 -- 少數超大型標案 -- 對平均值的影響），再算 z 分數。
+//     右偏分布 -- 少數超大型標案 -- 對平均值的影響），再算 z 分數。單一標案
+//     金額異常（不論偏高或偏低）本身無法反映安全成效，因此嚴重度上限為「中」，
+//     且會附註同縣市同年度的事故趨勢僅供參考，不作為嚴重度判斷依據。
 //   - 人口/事故密度離群縣市：沿用「事故 vs 人口/縣市」頁密度象限圖同一套
 //     密度算法，計算各縣市在（人口密度, 事故密度）平面上，相對全國平均值的
-//     標準化距離。
+//     標準化距離 -- 本身就是兩項指標的綜合判斷。
 //   以上全部屬於「統計上偏離平均」，不代表必然有弊端、違規或因果關係，僅供
 //   縮小查核範圍之用，仍須人工判讀原始資料與情境。
 // ============================================================
 const Audit = (() => {
   const DEFAULT_THRESHOLD = 2;
-  let lastAnomalies = [];
+  const SEV_LEVELS = ['low', 'medium', 'high'];
+  const SEV_LABEL = { high: '高', medium: '中', low: '低' };
+  let lastAnomaliesFiltered = [];
   let lastCrossRows = [];
 
   // ---------------- 基礎統計 ----------------
@@ -36,9 +46,10 @@ const Audit = (() => {
     if (absZ >= threshold + 0.4) return 'medium';
     return 'low';
   }
-  const SEV_LABEL = { high: '高', medium: '中', low: '低' };
+  function sevIndex(s) { return SEV_LEVELS.indexOf(s); }
+  function sevAt(i) { return SEV_LEVELS[Math.max(0, Math.min(SEV_LEVELS.length - 1, i))]; }
 
-  // ---------------- 年增率異常：A1 事故件數 / 舉發總件數 / 罰鍰收入 ----------------
+  // ---------------- A1 事故件數年增率（供其他指標交叉比對用） ----------------
 
   function a1Pairs() {
     const map = new Map();
@@ -52,6 +63,49 @@ const Audit = (() => {
     }));
     return out;
   }
+
+  // county|year -> 該年相對前一年的 A1 事故件數年增率（僅相鄰年度、前一年不為0時才有值）
+  let _a1YoyMapCache = null;
+  function computeA1YoyMap() {
+    if (_a1YoyMapCache) return _a1YoyMapCache;
+    const byCounty = new Map();
+    a1Pairs().forEach(p => {
+      if (!byCounty.has(p.county)) byCounty.set(p.county, new Map());
+      byCounty.get(p.county).set(p.year, p.value);
+    });
+    const map = new Map();
+    byCounty.forEach((yearMap, county) => {
+      const years = [...yearMap.keys()].sort((a, b) => a - b);
+      for (let i = 1; i < years.length; i++) {
+        const y0 = years[i - 1], y1 = years[i];
+        if (y1 - y0 !== 1) continue;
+        const v0 = yearMap.get(y0), v1 = yearMap.get(y1);
+        if (!v0) continue;
+        map.set(county + '|' + y1, (v1 - v0) / v0);
+      }
+    });
+    _a1YoyMapCache = map;
+    return map;
+  }
+
+  // 依「本指標年增率」與「同期 A1 事故件數年增率」的搭配，判斷這是「數值異常但無安全疑慮」
+  // 還是「數值異常且安全成效未同步改善」，藉此調整嚴重度（而不是只看單一指標的 z 分數）。
+  function judgeAgainstAccidentTrend(metricPct, accPct, metricLabel) {
+    if (accPct == null) return { note: '（同期 A1 事故件數資料不足，無法比對趨勢，嚴重度僅依本指標判斷）', adjust: 0 };
+    const metricUp = metricPct > 0, accUp = accPct > 0;
+    if (metricUp && !accUp) {
+      return { note: `同期 A1 事故件數下降 ${Util.fmtPct(accPct)}，${metricLabel}上升但事故已同步改善，較不需優先關注`, adjust: -1 };
+    }
+    if (metricUp && accUp) {
+      return { note: `同期 A1 事故件數同步上升 ${Util.fmtPct(accPct)}，${metricLabel}增加但事故未同步改善，值得留意`, adjust: +1 };
+    }
+    if (!metricUp && accUp) {
+      return { note: `同期 A1 事故件數卻上升 ${Util.fmtPct(accPct)}，${metricLabel}減少但事故惡化，值得留意`, adjust: +1 };
+    }
+    return { note: `同期 A1 事故件數同步下降 ${Util.fmtPct(accPct)}，兩者同向變化`, adjust: -1 };
+  }
+
+  // ---------------- 年增率異常：A1 事故件數 / 舉發總件數 / 罰鍰收入 ----------------
 
   function enfPairs() {
     const map = new Map();
@@ -72,7 +126,9 @@ const Audit = (() => {
     return ENFORCEMENT_FINES.records.map(r => ({ county: r.county, year: r.year, value: r.amount || 0 }));
   }
 
-  function yoyAnomalies(pairs, typeKey, typeLabel, threshold) {
+  // opts.crossRefAccident: 是否要對照同期 A1 事故件數年增率調整嚴重度（A1 本身不需要對照自己）
+  function yoyAnomalies(pairs, typeKey, typeLabel, threshold, opts) {
+    opts = opts || {};
     const byCounty = new Map();
     pairs.forEach(p => {
       if (!byCounty.has(p.county)) byCounty.set(p.county, new Map());
@@ -90,16 +146,25 @@ const Audit = (() => {
       }
     });
     const { mean, std } = meanStd(changes.map(c => c.pct));
+    const a1YoyMap = opts.crossRefAccident ? computeA1YoyMap() : null;
     const out = [];
     changes.forEach(c => {
       const z = zOf(c.pct, mean, std);
       const absZ = Math.abs(z);
       if (absZ < threshold) return;
+      let severity = severityOf(absZ, threshold);
+      let detail = `${c.prevYear}年 ${Util.fmtNum(c.v0)} → ${c.year}年 ${Util.fmtNum(c.v1)}（年增率 ${Util.fmtPct(c.pct)}，z=${z.toFixed(2)}）`;
+      if (a1YoyMap) {
+        const key = c.county + '|' + c.year;
+        const accPct = a1YoyMap.has(key) ? a1YoyMap.get(key) : null;
+        const dir = judgeAgainstAccidentTrend(c.pct, accPct, opts.metricLabelForCross || typeLabel);
+        severity = sevAt(sevIndex(severity) + dir.adjust);
+        detail += `；${dir.note}`;
+      }
       out.push({
         id: `${typeKey}__${c.county}__${c.year}`,
         typeLabel, county: c.county, year: c.year,
-        z, absZ, severity: severityOf(absZ, threshold),
-        detail: `${c.prevYear}年 ${Util.fmtNum(c.v0)} → ${c.year}年 ${Util.fmtNum(c.v1)}（年增率 ${Util.fmtPct(c.pct)}，z=${z.toFixed(2)}）`,
+        z, absZ, severity, detail,
       });
     });
     return out;
@@ -109,6 +174,7 @@ const Audit = (() => {
 
   function tenderOutliers(threshold) {
     if (!window.TENDERS) return [];
+    const a1YoyMap = computeA1YoyMap();
     const byCat = new Map();
     TENDERS.records.forEach(r => {
       if (!r.totalAmount || r.totalAmount <= 0) return;
@@ -123,11 +189,22 @@ const Audit = (() => {
         const z = zOf(logs[i], mean, std);
         const absZ = Math.abs(z);
         if (absZ < threshold) return;
+        // 單一標案的金額離群，無法像「同縣市年增率」一樣有明確的安全成效可對照
+        // （一個縣市一年可能有數十件同分類標案），因此嚴重度上限為「中」，
+        // 避免僅因金額統計上偏離就被當成「高風險」。
+        let severity = severityOf(absZ, threshold);
+        if (sevIndex(severity) > sevIndex('medium')) severity = 'medium';
+        let detail = `分類「${category}」內與同分類標案金額比較（取對數後），z=${z.toFixed(2)}；${r.agency || '（未知機關）'}／${r.title || '(無標題)'}，決標金額 ${Util.fmtNum(r.totalAmount)} 元`;
+        const key = (r.performLocCounty || '') + '|' + (r.awardYear || '');
+        if (r.performLocCounty && r.awardYear && a1YoyMap.has(key)) {
+          detail += `（僅供參考，非嚴重度判斷依據：${r.performLocCounty} ${r.awardYear}年 A1 事故件數年增率 ${Util.fmtPct(a1YoyMap.get(key))}；金額異常本身不代表工程有無效益或違規，須另行查核履約內容）`;
+        } else {
+          detail += '（金額異常本身不代表有問題，須另行查核履約內容是否合理）';
+        }
         out.push({
           id: `tender_outlier__${category}__${r.performLocCounty || ''}__${r.awardYear || ''}__${out.length}`,
           typeLabel: '標案金額離群值', county: r.performLocCounty || '（查無比對結果）', year: r.awardYear || '—',
-          z, absZ, severity: severityOf(absZ, threshold),
-          detail: `分類「${category}」內與同分類標案金額比較（取對數後），z=${z.toFixed(2)}；${r.agency || '（未知機關）'}／${r.title || '(無標題)'}，決標金額 ${Util.fmtNum(r.totalAmount)} 元`,
+          z, absZ, severity, detail,
         });
       });
     });
@@ -169,7 +246,7 @@ const Audit = (() => {
         id: `density_outlier__${p.county}__${year}`,
         typeLabel: '人口/事故密度離群縣市', county: p.county, year,
         z: dist, absZ: dist, severity: severityOf(dist, threshold),
-        detail: `${year}年 人口密度 ${Util.fmtNum(Math.round(p.x))} 人/km²（z=${zx.toFixed(2)}）、事故密度 ${p.y.toFixed(3)} 件/km²（z=${zy.toFixed(2)}），距全國平均的複合距離 ${dist.toFixed(2)}`,
+        detail: `${year}年 人口密度 ${Util.fmtNum(Math.round(p.x))} 人/km²（z=${zx.toFixed(2)}）、事故密度 ${p.y.toFixed(3)} 件/km²（z=${zy.toFixed(2)}），距全國平均的複合距離 ${dist.toFixed(2)}（本項已同時考量兩項指標，非單一指標判斷）`,
       });
     });
     out.sort((a, b) => b.absZ - a.absZ);
@@ -178,10 +255,10 @@ const Audit = (() => {
 
   const DATASET_DEFS = {
     a1_yoy:          { label: 'A1 事故件數 年增率異常',      run: th => yoyAnomalies(a1Pairs(), 'a1_yoy', 'A1事故件數年增率', th) },
-    enf_yoy:         { label: '舉發總件數 年增率異常',        run: th => yoyAnomalies(enfPairs(), 'enf_yoy', '舉發總件數年增率', th) },
-    fines_yoy:       { label: '罰鍰收入 年增率異常',          run: th => yoyAnomalies(finesPairs(), 'fines_yoy', '罰鍰收入年增率', th) },
-    tender_outlier:  { label: '標案金額離群值（同分類比較）', run: th => tenderOutliers(th) },
-    density_outlier: { label: '人口/事故密度離群縣市',        run: th => densityOutliers(th) },
+    enf_yoy:         { label: '舉發總件數 年增率異常（已對照事故趨勢）', run: th => yoyAnomalies(enfPairs(), 'enf_yoy', '舉發總件數年增率', th, { crossRefAccident: true, metricLabelForCross: '舉發件數' }) },
+    fines_yoy:       { label: '罰鍰收入 年增率異常（已對照事故趨勢）',   run: th => yoyAnomalies(finesPairs(), 'fines_yoy', '罰鍰收入年增率', th, { crossRefAccident: true, metricLabelForCross: '罰鍰收入' }) },
+    tender_outlier:  { label: '標案金額離群值（同分類比較，上限中度）', run: th => tenderOutliers(th) },
+    density_outlier: { label: '人口/事故密度離群縣市（雙指標）',        run: th => densityOutliers(th) },
   };
 
   function runAnomalies(datasetKey, threshold) {
@@ -189,7 +266,7 @@ const Audit = (() => {
       let all = [];
       Object.keys(DATASET_DEFS).forEach(k => { all = all.concat(DATASET_DEFS[k].run(threshold)); });
       all.sort((a, b) => b.absZ - a.absZ);
-      return all.slice(0, 200);
+      return all.slice(0, 300);
     }
     const def = DATASET_DEFS[datasetKey];
     return def ? def.run(threshold) : [];
@@ -197,6 +274,9 @@ const Audit = (() => {
 
   // ---------------- 審計意見 vs 標案 交叉比對 ----------------
 
+  // 只有這兩個子標籤能對應到標案分類；AUDIT_OPINIONS_TRAFFIC.tagItems 已針對這兩個
+  // 標籤各自列出「實際提到該類關鍵字」的具體審核意見句子（依標籤分組），做為交叉
+  // 比對「初判」的具體依據，而不是只憑整列的意見則數或跟比對無關的代表性摘要。
   const TAG_TO_TENDER_CATS = {
     '道路安全與路口工程': ['道路工程', '標誌標線', '人行道', '道路改善', '拓寬工程'],
     '科技執法與監理': ['科技執法'],
@@ -206,9 +286,21 @@ const Audit = (() => {
     if (!window.AUDIT_OPINIONS_TRAFFIC || !window.TENDERS) return [];
     return AUDIT_OPINIONS_TRAFFIC.map(o => {
       const comparableCats = new Set();
-      (o.tags || []).forEach(t => (TAG_TO_TENDER_CATS[t] || []).forEach(c => comparableCats.add(c)));
-      if (comparableCats.size === 0) {
-        return Object.assign({}, o, { comparableCats: [], matchCount: 0, matchAmount: 0, verdict: 'not_comparable' });
+      const matchedTagNames = [];
+      const matchedTitles = [];
+      Object.keys(TAG_TO_TENDER_CATS).forEach(tag => {
+        if (!(o.tags || []).includes(tag)) return;
+        const items = (o.tagItems && o.tagItems[tag]) || [];
+        if (!items.length) return; // 該標籤雖在整列標籤中，但沒有具體意見句可佐證，不採計
+        matchedTagNames.push(tag);
+        TAG_TO_TENDER_CATS[tag].forEach(c => comparableCats.add(c));
+        items.forEach(t => { if (!matchedTitles.includes(t)) matchedTitles.push(t); });
+      });
+      if (comparableCats.size === 0 || matchedTitles.length === 0) {
+        return Object.assign({}, o, {
+          comparableCats: [], matchedTagNames: [], matchedTitles: [],
+          matchCount: 0, matchAmount: 0, verdict: 'not_comparable',
+        });
       }
       const matches = TENDERS.records.filter(r =>
         r.performLocCounty === o.county &&
@@ -217,20 +309,20 @@ const Audit = (() => {
       );
       const matchAmount = matches.reduce((s, r) => s + (r.totalAmount || 0), 0);
       return Object.assign({}, o, {
-        comparableCats: [...comparableCats],
+        comparableCats: [...comparableCats], matchedTagNames, matchedTitles,
         matchCount: matches.length, matchAmount,
         verdict: matches.length === 0 ? 'no_match' : 'has_match',
       });
     }).sort((a, b) => {
       const rank = { no_match: 0, has_match: 1, not_comparable: 2 };
-      return rank[a.verdict] - rank[b.verdict] || b.n - a.n;
+      return rank[a.verdict] - rank[b.verdict] || b.matchedTitles.length - a.matchedTitles.length;
     });
   }
 
   const VERDICT_LABEL = {
-    no_match: '<span class="sev-badge sev-high">有意見／查無對應標案</span>',
+    no_match: '<span class="sev-badge sev-high">有具體意見／查無對應標案</span>',
     has_match: '<span class="sev-badge sev-info">已有對應標案</span>',
-    not_comparable: '<span class="sev-badge sev-low">標籤無法比對</span>',
+    not_comparable: '<span class="sev-badge sev-low">無可比對依據</span>',
   };
 
   // ---------------- 待查／可疑案件清單（localStorage） ----------------
@@ -280,6 +372,20 @@ const Audit = (() => {
     Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `稽核待查清單_${Date.now()}.csv`);
   }
 
+  function exportAnomalyCsv() {
+    if (!lastAnomaliesFiltered.length) { alert('目前篩選條件下沒有可匯出的異常項目'); return; }
+    const cols = [
+      { key: 'idx', label: '項次', numeric: true }, { key: 'typeLabel', label: '類型' },
+      { key: 'county', label: '縣市' }, { key: 'year', label: '年度' },
+      { key: 'severity', label: '嚴重度', value: r => SEV_LABEL[r.severity] },
+      { key: 'z', label: 'z分數／距離', value: r => r.z.toFixed(2) },
+      { key: 'detail', label: '說明' },
+    ];
+    const rows = lastAnomaliesFiltered.map((r, i) => Object.assign({ idx: i + 1 }, r));
+    const csv = Util.toCsv(rows, cols);
+    Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `稽核異常偵測清單_${Date.now()}.csv`);
+  }
+
   // ---------------- 渲染 ----------------
 
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -289,19 +395,32 @@ const Audit = (() => {
     const sensSel = document.getElementById('auditSensitivitySelect');
     if (!datasetSel) return;
     const threshold = sensSel ? Number(sensSel.value) : DEFAULT_THRESHOLD;
-    lastAnomalies = runAnomalies(datasetSel.value, threshold);
+    const all = runAnomalies(datasetSel.value, threshold);
+
+    const countyFilter = document.getElementById('auditCountyFilterSelect');
+    const sevFilter = document.getElementById('auditSeverityFilterSelect');
+    const countyVal = countyFilter ? countyFilter.value : '';
+    const sevVal = sevFilter ? sevFilter.value : '';
+    lastAnomaliesFiltered = all.filter(r =>
+      (!countyVal || r.county === countyVal) && (!sevVal || r.severity === sevVal)
+    );
+
     const countEl = document.getElementById('auditAnomalyCount');
-    if (countEl) countEl.textContent = `共 ${lastAnomalies.length} 筆${lastAnomalies.length >= 200 ? '（已達顯示上限，僅列出 |z| 最大的前 200 筆）' : ''}`;
+    if (countEl) {
+      const capNote = all.length >= 300 ? '（合併檢視已達顯示上限，僅取 |z| 最大的前 300 筆再篩選）' : '';
+      countEl.textContent = `符合篩選 ${lastAnomaliesFiltered.length} 筆／偵測到 ${all.length} 筆${capNote}`;
+    }
     const table = document.getElementById('auditAnomalyTable');
     if (!table) return;
-    if (!lastAnomalies.length) {
-      table.innerHTML = '<tbody><tr><td class="hint" style="padding:16px 4px">目前資料集／敏感度設定下沒有偵測到異常。可嘗試調寬「敏感度」。</td></tr></tbody>';
+    if (!lastAnomaliesFiltered.length) {
+      table.innerHTML = '<tbody><tr><td class="hint" style="padding:16px 4px">目前資料集／敏感度／縣市／嚴重度篩選條件下沒有偵測到異常。可嘗試調寬「敏感度」或改選「全部」縣市／嚴重度。</td></tr></tbody>';
       return;
     }
     table.innerHTML =
-      '<thead><tr><th>類型</th><th>縣市</th><th>年度</th><th>嚴重度</th><th>說明</th><th></th></tr></thead><tbody>' +
-      lastAnomalies.map((r, i) => `
+      '<thead><tr><th>項次</th><th>類型</th><th>縣市</th><th>年度</th><th>嚴重度</th><th>說明</th><th></th></tr></thead><tbody>' +
+      lastAnomaliesFiltered.map((r, i) => `
         <tr>
+          <td>${i + 1}</td>
           <td>${esc(r.typeLabel)}</td>
           <td>${esc(r.county)}</td>
           <td>${esc(r.year)}</td>
@@ -314,7 +433,7 @@ const Audit = (() => {
       `).join('') + '</tbody>';
     table.querySelectorAll('.wl-add-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const row = lastAnomalies[Number(btn.dataset.idx)];
+        const row = lastAnomaliesFiltered[Number(btn.dataset.idx)];
         if (!row) return;
         upsertWatchlist(row);
         renderAnomalyTable();
@@ -378,20 +497,24 @@ const Audit = (() => {
       return;
     }
     table.innerHTML =
-      '<thead><tr><th>縣市</th><th>年度</th><th>意見則數</th><th>相關子標籤</th><th>同期(±1年)相關標案</th><th>初判</th><th>代表性摘要</th><th></th></tr></thead><tbody>' +
+      '<thead><tr><th>縣市</th><th>年度</th><th>相關子標籤</th><th>同期(±1年)相關標案</th><th>初判</th><th>依據（實際審核意見句）</th><th></th></tr></thead><tbody>' +
       lastCrossRows.map((r, i) => {
         const id = `audit_cross__${r.county}__${r.year}`;
-        const matchText = r.verdict === 'not_comparable' ? '—'
-          : `${r.matchCount} 筆／${Util.fmtNum(r.matchAmount)} 元`;
+        const matchText = r.verdict === 'not_comparable' ? '—' : `${r.matchCount} 筆／${Util.fmtNum(r.matchAmount)} 元`;
+        const tagText = r.verdict === 'not_comparable'
+          ? `${(r.tags || []).map(esc).join('、') || '（無標籤）'}（皆無法對應標案分類，或無具體意見句可佐證）`
+          : r.matchedTagNames.map(esc).join('、');
+        const basisText = r.verdict === 'not_comparable'
+          ? '—'
+          : r.matchedTitles.map(esc).join('；');
         return `
         <tr>
           <td>${esc(r.county)}</td>
           <td>${esc(r.year)}</td>
-          <td>${esc(r.n)}</td>
-          <td>${(r.tags || []).map(esc).join('、') || '（無）'}</td>
+          <td>${tagText}</td>
           <td>${matchText}</td>
           <td>${VERDICT_LABEL[r.verdict]}</td>
-          <td style="max-width:360px">${esc(r.rep)}</td>
+          <td>${basisText}</td>
           <td>${r.verdict === 'no_match'
             ? (watchlistHas(id) ? '<span class="hint">已在待查清單</span>' : `<button class="btn wl-cross-add-btn" data-idx="${i}">＋ 加入待查</button>`)
             : ''}</td>
@@ -405,7 +528,7 @@ const Audit = (() => {
           id: `audit_cross__${r.county}__${r.year}`,
           typeLabel: '審計意見／標案交叉比對',
           county: r.county, year: r.year,
-          detail: `${r.year}年「交通」領域審核意見共 ${r.n} 則（子標籤：${(r.tags || []).join('、') || '無'}），同縣市同期（±1年）在對應標案分類下查無標案。代表性摘要：${r.rep}`,
+          detail: `${r.year}年「交通」領域審核意見中，子標籤「${r.matchedTagNames.join('、')}」有具體意見句：${r.matchedTitles.join('；')}。同縣市同期（±1年）在對應標案分類（${r.comparableCats.join('、')}）下查無標案。`,
         });
         renderCrossCheck();
         renderWatchlist();
@@ -430,13 +553,26 @@ const Audit = (() => {
     const sensSel = document.getElementById('auditSensitivitySelect');
     if (sensSel) sensSel.addEventListener('change', renderAnomalyTable);
 
+    const countyFilterSel = document.getElementById('auditCountyFilterSelect');
+    if (countyFilterSel) {
+      countyFilterSel.innerHTML = '<option value="">全部縣市</option>' +
+        META.counties.map(c => `<option value="${c}">${c}</option>`).join('');
+      countyFilterSel.value = '';
+      countyFilterSel.addEventListener('change', renderAnomalyTable);
+    }
+    const sevFilterSel = document.getElementById('auditSeverityFilterSelect');
+    if (sevFilterSel) sevFilterSel.addEventListener('change', renderAnomalyTable);
+
     const addAllBtn = document.getElementById('auditAddAllBtn');
     if (addAllBtn) addAllBtn.addEventListener('click', () => {
-      if (!lastAnomalies.length) { alert('目前沒有可加入的異常項目'); return; }
-      lastAnomalies.forEach(upsertWatchlist);
+      if (!lastAnomaliesFiltered.length) { alert('目前篩選條件下沒有可加入的異常項目'); return; }
+      lastAnomaliesFiltered.forEach(upsertWatchlist);
       renderAnomalyTable();
       renderWatchlist();
     });
+
+    const anomalyExportBtn = document.getElementById('auditAnomalyExportCsv');
+    if (anomalyExportBtn) anomalyExportBtn.addEventListener('click', exportAnomalyCsv);
 
     const exportBtn = document.getElementById('auditWlExportCsv');
     if (exportBtn) exportBtn.addEventListener('click', exportWatchlistCsv);
