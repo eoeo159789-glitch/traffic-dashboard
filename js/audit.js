@@ -302,10 +302,13 @@ const Audit = (() => {
           matchCount: 0, matchAmount: 0, verdict: 'not_comparable',
         });
       }
+      // 修正：TENDERS.records 的 awardYear 是民國年（110~115），而審計意見的
+      // year 是西元年（2021~2025），先前直接相減比對，等於恆為「查無對應標案」
+      // ——這不是真的查無標案，是年份系統沒對齊，先前版本的比對結果因此不可信。
       const matches = TENDERS.records.filter(r =>
         r.performLocCounty === o.county &&
         comparableCats.has(r.category) &&
-        r.awardYear != null && Math.abs(r.awardYear - o.year) <= 1
+        r.awardYear != null && Math.abs((r.awardYear + 1911) - o.year) <= 1
       );
       const matchAmount = matches.reduce((s, r) => s + (r.totalAmount || 0), 0);
       return Object.assign({}, o, {
@@ -491,9 +494,18 @@ const Audit = (() => {
   function renderCrossCheck() {
     const table = document.getElementById('auditCrossCheckTable');
     if (!table) return;
-    lastCrossRows = crossCheckRows();
+    const countySel = document.getElementById('auditCrossCountySelect');
+    const yearSel = document.getElementById('auditCrossYearSelect');
+    const countyVal = countySel ? countySel.value : '';
+    const yearVal = yearSel ? yearSel.value : '';
+    const all = crossCheckRows();
+    lastCrossRows = all.filter(r =>
+      (!countyVal || r.county === countyVal) && (!yearVal || String(r.year) === yearVal)
+    );
+    const countEl = document.getElementById('auditCrossCount');
+    if (countEl) countEl.textContent = `符合篩選 ${lastCrossRows.length} 筆／共 ${all.length} 筆`;
     if (!lastCrossRows.length) {
-      table.innerHTML = '<tbody><tr><td class="hint" style="padding:16px 4px">找不到可比對的審計意見資料。</td></tr></tbody>';
+      table.innerHTML = '<tbody><tr><td class="hint" style="padding:16px 4px">目前縣市／年度篩選條件下沒有資料，可嘗試改選「全部」。</td></tr></tbody>';
       return;
     }
     table.innerHTML =
@@ -576,6 +588,23 @@ const Audit = (() => {
 
     const exportBtn = document.getElementById('auditWlExportCsv');
     if (exportBtn) exportBtn.addEventListener('click', exportWatchlistCsv);
+
+    const crossCountySel = document.getElementById('auditCrossCountySelect');
+    const crossYearSel = document.getElementById('auditCrossYearSelect');
+    if (crossCountySel && window.AUDIT_OPINIONS_TRAFFIC) {
+      const counties = [...new Set(AUDIT_OPINIONS_TRAFFIC.map(o => o.county))].sort();
+      crossCountySel.innerHTML = '<option value="">全部縣市</option>' +
+        counties.map(c => `<option value="${c}">${c}</option>`).join('');
+      crossCountySel.value = '';
+      crossCountySel.addEventListener('change', renderCrossCheck);
+    }
+    if (crossYearSel && window.AUDIT_OPINIONS_TRAFFIC) {
+      const years = [...new Set(AUDIT_OPINIONS_TRAFFIC.map(o => o.year))].sort((a, b) => a - b);
+      crossYearSel.innerHTML = '<option value="">全部年度</option>' +
+        years.map(y => `<option value="${y}">${y}</option>`).join('');
+      crossYearSel.value = '';
+      crossYearSel.addEventListener('change', renderCrossCheck);
+    }
   }
 
   return { init, render };
