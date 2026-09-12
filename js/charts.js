@@ -486,28 +486,96 @@ const Charts = (() => {
     });
   }
 
-  function renderDensityScatter(counties) {
+  // -- 人口密度 vs 事故密度：輔助函式 --
+  function indicatorValue(name, county, year) {
+    const row = INDICATORS.find(i => i.indicator === name && i.county === county && i.year === year);
+    return row ? row.value : null;
+  }
+  // 官方指標未直接提供各縣市土地面積，以「（男性人口＋女性人口）÷ 人口密度」反推
+  // （皆為官方公布數字之四則運算組合，非新增推估假設）。
+  function computeAreaSqKm(county, year) {
+    const male = indicatorValue('男性人口(人)', county, year);
+    const female = indicatorValue('女性人口(人)', county, year);
+    const dens = indicatorValue('人口密度(人/平方公里)', county, year);
+    if (male == null || female == null || !dens) return null;
+    return (male + female) / dens;
+  }
+  function densityQuadIndex(x, y, meanX, meanY) {
+    const xHigh = x >= meanX, yHigh = y >= meanY;
+    if (xHigh && yHigh) return 0;
+    if (!xHigh && yHigh) return 1;
+    if (!xHigh && !yHigh) return 2;
+    return 3;
+  }
+  function renderDensityQuadLegend(groups, xLabel, yLabel) {
+    const descs = [
+      `${xLabel}高於平均、${yLabel}高於平均`,
+      `${xLabel}低於平均、${yLabel}高於平均`,
+      `${xLabel}低於平均、${yLabel}低於平均`,
+      `${xLabel}高於平均、${yLabel}低於平均`,
+    ];
+    const html = [0, 1, 2, 3].map(q => {
+      const names = groups[q] || [];
+      return `
+        <div class="quad-box">
+          <div class="quad-box-head"><span class="quad-dot" style="background:${QUADRANT_COLORS[q]}"></span>${descs[q]}（${names.length} 縣市）</div>
+          <div class="quad-box-list">${names.length ? names.join('、') : '（無）'}</div>
+        </div>
+      `;
+    }).join('');
+    const el = document.getElementById('densityQuadLegend');
+    if (el) el.innerHTML = html;
+  }
+
+  // yearSel: 數字年度，或 'all' 代表全部年度加總／平均。showLabels：是否在圖上直接標示縣市名稱。
+  function renderDensityScatter(counties, yearSel, showLabels) {
     const years = META.accidentYears;
+    const isAll = yearSel === 'all' || yearSel == null;
     const points = [];
     counties.forEach(c => {
-      years.forEach(y => {
-        const dens = INDICATORS.find(i => i.indicator === '人口密度(人/平方公里)' && i.county === c && i.year === y);
-        if (!dens) return;
+      let popDensity = null, accDensity = null;
+      if (isAll) {
+        let area = null;
+        const densVals = [];
+        years.forEach(y => {
+          const a = computeAreaSqKm(c, y);
+          if (a != null) area = a; // 土地面積年度間變動極小，取任一有值年度即可
+          const d = indicatorValue('人口密度(人/平方公里)', c, y);
+          if (d != null) densVals.push(d);
+        });
+        if (area == null || densVals.length === 0) return;
+        const totalAcc = ACCIDENTS.filter(a => a.county === c).length;
+        popDensity = densVals.reduce((s, v) => s + v, 0) / densVals.length;
+        accDensity = totalAcc / area;
+      } else {
+        const y = Number(yearSel);
+        const area = computeAreaSqKm(c, y);
+        const dens = indicatorValue('人口密度(人/平方公里)', c, y);
+        if (area == null || dens == null) return;
         const accCount = ACCIDENTS.filter(a => a.county === c && a.year === y).length;
-        points.push({ x: dens.value, y: accCount, label: `${c} ${y}` });
-      });
+        popDensity = dens;
+        accDensity = accCount / area;
+      }
+      points.push({ x: popDensity, y: accDensity, label: c });
     });
-    upsert('densityScatterChart', {
-      type: 'scatter',
-      data: { datasets: [{ label: '人口密度 vs 事故件數', data: points, backgroundColor: Util.seriesColor(4) }] },
-      options: baseOptions({
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.raw.label}：密度 ${Util.fmtNum(ctx.raw.x)} / 事故 ${Util.fmtNum(ctx.raw.y)}` } } },
-        scales: {
-          x: { title: { display: true, text: '人口密度（人/平方公里）', color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
-          y: { title: { display: true, text: '事故件數', color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() }, beginAtZero: true },
-        },
-      }),
+
+    if (points.length === 0) {
+      upsert('densityScatterChart', { type: 'scatter', data: { datasets: [] }, options: baseOptions({}) });
+      renderDensityQuadLegend({ 0: [], 1: [], 2: [], 3: [] }, '人口密度', '事故密度');
+      return;
+    }
+
+    const meanX = points.reduce((s, p) => s + p.x, 0) / points.length;
+    const meanY = points.reduce((s, p) => s + p.y, 0) / points.length;
+    const groups = { 0: [], 1: [], 2: [], 3: [] };
+    const tagged = points.map(p => {
+      const q = densityQuadIndex(p.x, p.y, meanX, meanY);
+      groups[q].push(p.label);
+      return Object.assign({}, p, { q });
     });
+
+    renderImproveScatter('densityScatterChart', tagged, '人口密度', '事故密度', meanX, meanY, '人/km²', '件/km²', !!showLabels);
+    renderDensityQuadLegend(groups, '人口密度', '事故密度');
   }
 
   function renderLongTrend(counties) {
@@ -643,7 +711,28 @@ const Charts = (() => {
 
   // xUnit / yUnit：附加在數值後面的單位文字（預設 '%'，維持既有改善%／變化% 圖表的行為）；
   // 傳空字串 '' 表示不附加任何單位。
-  function renderImproveScatter(canvasId, points, xLabel, yLabel, meanX, meanY, xUnit = '%', yUnit = '%') {
+  // showLabels：是否在每個點旁直接標示 label 文字（預設 false，不影響既有呼叫端的圖表外觀）
+  function renderImproveScatter(canvasId, points, xLabel, yLabel, meanX, meanY, xUnit = '%', yUnit = '%', showLabels = false) {
+    const pointLabelsPlugin = {
+      id: 'improveScatterPointLabels',
+      afterDatasetsDraw(chart) {
+        if (!showLabels) return;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta || !meta.data) return;
+        const { ctx } = chart;
+        ctx.save();
+        ctx.font = '11px sans-serif';
+        ctx.fillStyle = Util.chartTextColor();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        meta.data.forEach((el, i) => {
+          const raw = points[i];
+          if (!raw) return;
+          ctx.fillText(raw.label, el.x, el.y - 8);
+        });
+        ctx.restore();
+      },
+    };
     const quadLinesPlugin = {
       id: 'improveQuadLines',
       afterDraw(chart) {
@@ -707,7 +796,7 @@ const Charts = (() => {
           y: { title: { display: true, text: yLabel + (yUnit ? `（${yUnit}）` : ''), color: Util.chartTextColor() }, ticks: { color: Util.chartTextColor() }, grid: { color: Util.chartGridColor() } },
         },
       }),
-      plugins: [quadLinesPlugin],
+      plugins: [quadLinesPlugin, pointLabelsPlugin],
     });
   }
 

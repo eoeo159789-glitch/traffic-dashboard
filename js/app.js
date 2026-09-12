@@ -221,7 +221,11 @@
     const counties = [...State.filters.counties];
     const year = Number(document.getElementById('popYearSelect').value);
     Charts.renderPopRate(counties, year);
-    Charts.renderDensityScatter(counties);
+    const densityYearSel = document.getElementById('densityYearSelect');
+    const densityYear = densityYearSel ? densityYearSel.value : 'all';
+    const densityLabelToggle = document.getElementById('densityShowLabelsToggle');
+    const densityShowLabels = !!(densityLabelToggle && densityLabelToggle.checked);
+    Charts.renderDensityScatter(counties, densityYear, densityShowLabels);
     Charts.renderLongTrend(counties);
   }
 
@@ -317,7 +321,11 @@
     document.getElementById('crossMetric').addEventListener('change', e => { crossState.metric = e.target.value; renderCurrentTab(); });
     document.getElementById('singleDim').addEventListener('change', renderCurrentTab);
 
-    document.getElementById('enfCategorySelect').innerHTML = META.enforcementCategories.map(c => `<option value="${c}">${c}</option>`).join('');
+    document.getElementById('enfCategorySelect').innerHTML = META.enforcementCategories
+      .map(c => `<option value="${c}">${c === '總件數' ? '全部（各類加總）' : c}</option>`).join('');
+    // 「總件數」本身就是該縣市/年度其餘 8 類舉發件數的加總（已核對數字一致），
+    // 故直接沿用此既有分類做為「全部」選項，不另外新增重複的加總邏輯；並設為預設選項。
+    document.getElementById('enfCategorySelect').value = '總件數';
     document.getElementById('enfCategorySelect').addEventListener('change', renderCurrentTab);
 
     const finesYearSel = document.getElementById('finesYearSelect');
@@ -334,6 +342,16 @@
     document.getElementById('popYearSelect').innerHTML = popYears.map(y => `<option value="${y}">${y}年</option>`).join('');
     document.getElementById('popYearSelect').value = popYears[popYears.length - 1];
     document.getElementById('popYearSelect').addEventListener('change', renderCurrentTab);
+
+    const densityYearSel = document.getElementById('densityYearSelect');
+    if (densityYearSel) {
+      densityYearSel.innerHTML = '<option value="all">全部年度</option>' +
+        popYears.map(y => `<option value="${y}">${y}年</option>`).join('');
+      densityYearSel.value = 'all';
+      densityYearSel.addEventListener('change', renderCurrentTab);
+    }
+    const densityLabelToggle = document.getElementById('densityShowLabelsToggle');
+    if (densityLabelToggle) densityLabelToggle.addEventListener('change', renderCurrentTab);
   }
 
   // ---------------- 地圖導航：縣市/鄉鎮跳轉、座標定位、自訂座標環域 ----------------

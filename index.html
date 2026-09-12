@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>臺灣交通事故資料整合分析平台</title>
+<title>臺灣交通事故資料整合分析模組</title>
 <link rel="stylesheet" href="css/style.css?v=20260911">
 <!-- Leaflet 地圖 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
@@ -14,10 +14,10 @@
 <div class="app-shell">
   <header class="app-header">
     <button class="sidebar-toggle" id="sidebarToggle" aria-label="開啟篩選">☰</button>
-    <h1>🚦 臺灣交通事故資料整合分析平台</h1>
+    <h1>🚦 臺灣交通事故資料整合分析模組</h1>
     <span class="subtitle" id="dataRangeLabel"></span>
     <div class="spacer"></div>
-    <a class="theme-toggle" href="budget.html" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">🗺️ 決算地圖</a>
+    <a class="theme-toggle" href="budget.html" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📊 審計意見統計</a>
     <a class="theme-toggle" href="tenders.html" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📑 標案彙整</a>
     <button class="theme-toggle" id="themeToggle">🌓 深色/淺色</button>
   </header>
@@ -336,10 +336,16 @@
         </div>
         <div class="card">
           <div class="card-head">
-            <h2>人口密度 vs 事故密度（散佈）</h2>
-            <div class="card-tools"><button class="btn" data-export-chart="densityScatterChart">⭳ PNG</button></div>
+            <h2>人口密度 vs 事故密度（象限圖）</h2>
+            <div class="card-tools">
+              年度：<select id="densityYearSelect"></select>
+              <label class="hint"><input type="checkbox" id="densityShowLabelsToggle"> 顯示縣市名稱</label>
+              <button class="btn" data-export-chart="densityScatterChart">⭳ PNG</button>
+            </div>
           </div>
           <div class="chart-wrap tall"><canvas id="densityScatterChart"></canvas></div>
+          <p class="hint">X 軸為「人口密度」（官方統計指標，人/平方公里）；Y 軸為「事故密度」＝該縣市 A1 事故件數 ÷ 土地面積（平方公里）。官方指標未直接提供各縣市土地面積，此處以「（男性人口＋女性人口）÷ 人口密度」反推面積，皆為官方公布數字之四則運算組合，並非新增推估假設。年度選單可切換單一年度，或選「全部年度」（事故密度＝歷年 A1 事故件數加總 ÷ 土地面積；人口密度取各年度平均值）。兩條虛線為<strong>目前顯示縣市在 X、Y 軸的平均值</strong>，將圖表切成四個象限；勾選「顯示縣市名稱」可在圖上直接標出各點所屬縣市。<strong>此圖僅呈現描述性關聯，不代表因果關係。</strong></p>
+          <div class="quad-legend" id="densityQuadLegend"></div>
         </div>
       </div>
       <div class="card">
