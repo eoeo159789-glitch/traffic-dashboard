@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>臺灣交通事故資料整合分析模組</title>
-<link rel="stylesheet" href="css/style.css?v=20260911">
+<link rel="stylesheet" href="css/style.css?v=20260912">
 <!-- Leaflet 地圖 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
@@ -78,6 +78,7 @@
       <button class="tab-btn" data-tab="enforcement">事故 vs 舉發執法</button>
       <button class="tab-btn" data-tab="population">事故 vs 人口/縣市</button>
       <button class="tab-btn" data-tab="improve">改善趨勢分析</button>
+      <button class="tab-btn" data-tab="audit">稽核工作站</button>
       <button class="tab-btn" data-tab="tenders">工程經費(標案)</button>
       <button class="tab-btn" data-tab="table">資料表與匯出</button>
     </div>
@@ -323,6 +324,12 @@
 
     <!-- ============ 事故 vs 人口/縣市 ============ -->
     <section class="tab-panel" id="tab-population">
+      <div class="nav-row">
+        <span class="nav-label">篩選（套用於下方「事故率」與「密度象限圖」兩張圖）：</span>
+        縣市：<select id="popCountySelect"></select>
+        事故類型：<select id="popAccTypeSelect"></select>
+      </div>
+      <p class="hint">「縣市」選定特定縣市時，下方兩圖只會顯示該縣市（不受側邊欄縣市勾選影響）；選「全部（依側邊欄設定）」則恢復採用側邊欄目前勾選的縣市。「事故類型」可讓事故率／事故密度只計入某一種事故類型（例如僅「人與汽（機）車」），預設「全部事故類型」不篩選。</p>
       <div class="grid-2">
         <div class="card">
           <div class="card-head">
@@ -464,6 +471,44 @@
       </div>
     </section>
 
+    <!-- ============ 稽核工作站 ============ -->
+    <section class="tab-panel" id="tab-audit">
+      <div class="card">
+        <div class="card-head">
+          <h2>跨資料集異常偵測儀表板</h2>
+        </div>
+        <p class="hint">以簡單的統計方法（年度相鄰的年增率、或同分類金額的 z 分數）在既有資料中快速篩查「數值明顯偏離常態」的縣市／標案，作為稽核人員決定優先查核對象的起點。<strong>被列為「異常」僅代表統計上偏離平均，不代表必然有弊端或違規，仍須人工進一步查證</strong>。年增率類異常只在「年度相鄰」且「前一年數值不為 0」時計算；標案金額比較採對數轉換以降低金額本身分佈右偏（少數超大標案）的影響。</p>
+        <div class="audit-toolbar">
+          資料集：<select id="auditDatasetSelect"></select>
+          敏感度：<select id="auditSensitivitySelect">
+            <option value="1.5">寬鬆（|z| ≥ 1.5，結果較多）</option>
+            <option value="2" selected>標準（|z| ≥ 2）</option>
+            <option value="2.5">嚴格（|z| ≥ 2.5，結果較少）</option>
+          </select>
+          <button class="btn" id="auditAddAllBtn">＋ 全部加入待查清單</button>
+          <span class="mini-count" id="auditAnomalyCount"></span>
+        </div>
+        <div class="table-scroll"><table class="data-table" id="auditAnomalyTable"></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>待查／可疑案件清單</h2>
+          <div class="card-tools"><button class="btn" id="auditWlExportCsv">⭳ 匯出清單 CSV</button></div>
+        </div>
+        <p class="hint">清單只儲存在您目前使用的這個瀏覽器中（不會上傳到任何伺服器）；換裝置、換瀏覽器或清除瀏覽資料會遺失，請養成定期「匯出 CSV」備份的習慣。可從上方「異常偵測」或下方「意見／標案交叉比對」按「＋ 加入待查」，也可自行標記查核狀態與備註。</p>
+        <div class="table-scroll"><table class="data-table" id="auditWatchlistTable"></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>審計意見／標案交叉比對看板</h2>
+        </div>
+        <p class="hint">將審計部「交通」政策領域審核意見（與「審計意見統計」頁同一份原始資料，僅取縣市層級、110–114 年度）比對本平台「工程經費(標案)」中相關分類的標案，抓出「有審核意見、但同縣市同期（年度相差在1年內）查無對應分類標案」的組合，作為優先查核起點。<strong>目前只有「道路安全與路口工程」「科技執法與監理」兩個子標籤能對應到標案分類（道路工程／標誌標線／人行道／道路改善／拓寬工程／科技執法）；其餘子標籤（如公共運輸與客運鐵路、電動車與淨零運具、港埠與航空、停車管理）沒有可比對的標案分類，會標示為「無法比對」，並非「查無標案」，請勿誤讀為沒有問題。</strong>比對邏輯單純以「同縣市＋年度相差在1年內＋分類相符」配對，未核對具體內容是否確實相關，僅供起手篩查，仍須人工複核意見全文與標案內容。</p>
+        <div class="table-scroll"><table class="data-table" id="auditCrossCheckTable"></table></div>
+      </div>
+    </section>
+
     <!-- ============ 工程經費(標案) ============ -->
     <section class="tab-panel" id="tab-tenders">
       <div class="card">
@@ -580,39 +625,41 @@
 
 <!-- 資料檔（由 scripts/build_data.py 產生） -->
 <!-- 版本查詢字串（?v=）用於避免靜態主機／瀏覽器快取到更新前的舊檔，每次更新資料或程式碼請一併更新此版號 -->
-<script src="data/meta.data.js?v=20260911"></script>
-<script src="data/accidents.data.js?v=20260911"></script>
-<script src="data/parties.data.js?v=20260911"></script>
-<script src="data/enforcement.data.js?v=20260911"></script>
-<script src="data/indicators.data.js?v=20260911"></script>
-<script src="data/enforcement_fines.data.js?v=20260911"></script>
-<script src="data/a2_export_manifest.data.js?v=20260911"></script>
-<script src="data/points_hotspot1000.data.js?v=20260911"></script>
-<script src="data/points_safety799.data.js?v=20260911"></script>
-<script src="data/points_tech_enforcement.data.js?v=20260911"></script>
-<script src="data/geo_jump.data.js?v=20260911"></script>
-<script src="data/point_buffer_a1.data.js?v=20260911"></script>
-<script src="data/point_buffer_a2.data.js?v=20260911"></script>
-<script src="data/a2_by_county.data.js?v=20260911"></script>
-<script src="data/a2_by_month.data.js?v=20260911"></script>
-<script src="data/a2_by_hour.data.js?v=20260911"></script>
-<script src="data/a2_acc_type_minor.data.js?v=20260911"></script>
-<script src="data/a2_acc_type_major.data.js?v=20260911"></script>
-<script src="data/a2_cause_minor.data.js?v=20260911"></script>
-<script src="data/a2_age_bracket.data.js?v=20260911"></script>
-<script src="data/a2_crosstab.data.js?v=20260911"></script>
-<script src="data/a2_geo.data.js?v=20260911"></script>
-<script src="data/tenders.data.js?v=20260911"></script>
+<script src="data/meta.data.js?v=20260912"></script>
+<script src="data/accidents.data.js?v=20260912"></script>
+<script src="data/parties.data.js?v=20260912"></script>
+<script src="data/enforcement.data.js?v=20260912"></script>
+<script src="data/indicators.data.js?v=20260912"></script>
+<script src="data/enforcement_fines.data.js?v=20260912"></script>
+<script src="data/a2_export_manifest.data.js?v=20260912"></script>
+<script src="data/points_hotspot1000.data.js?v=20260912"></script>
+<script src="data/points_safety799.data.js?v=20260912"></script>
+<script src="data/points_tech_enforcement.data.js?v=20260912"></script>
+<script src="data/geo_jump.data.js?v=20260912"></script>
+<script src="data/point_buffer_a1.data.js?v=20260912"></script>
+<script src="data/point_buffer_a2.data.js?v=20260912"></script>
+<script src="data/a2_by_county.data.js?v=20260912"></script>
+<script src="data/a2_by_month.data.js?v=20260912"></script>
+<script src="data/a2_by_hour.data.js?v=20260912"></script>
+<script src="data/a2_acc_type_minor.data.js?v=20260912"></script>
+<script src="data/a2_acc_type_major.data.js?v=20260912"></script>
+<script src="data/a2_cause_minor.data.js?v=20260912"></script>
+<script src="data/a2_age_bracket.data.js?v=20260912"></script>
+<script src="data/a2_crosstab.data.js?v=20260912"></script>
+<script src="data/a2_geo.data.js?v=20260912"></script>
+<script src="data/tenders.data.js?v=20260912"></script>
+<script src="data/audit_opinions_traffic.data.js?v=20260912"></script>
 
 <!-- 應用程式邏輯 -->
-<script src="js/util.js?v=20260911"></script>
-<script src="js/state.js?v=20260911"></script>
-<script src="js/charts.js?v=20260911"></script>
-<script src="js/map.js?v=20260911"></script>
-<script src="js/hotspot.js?v=20260911"></script>
-<script src="js/improve.js?v=20260911"></script>
-<script src="js/tenders.js?v=20260911"></script>
-<script src="js/export.js?v=20260911"></script>
-<script src="js/app.js?v=20260911"></script>
+<script src="js/util.js?v=20260912"></script>
+<script src="js/state.js?v=20260912"></script>
+<script src="js/charts.js?v=20260912"></script>
+<script src="js/map.js?v=20260912"></script>
+<script src="js/hotspot.js?v=20260912"></script>
+<script src="js/improve.js?v=20260912"></script>
+<script src="js/tenders.js?v=20260912"></script>
+<script src="js/audit.js?v=20260912"></script>
+<script src="js/export.js?v=20260912"></script>
+<script src="js/app.js?v=20260912"></script>
 </body>
 </html>

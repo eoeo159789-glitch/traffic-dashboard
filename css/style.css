@@ -527,3 +527,41 @@ table.data-table tbody tr:hover { background: var(--page-plane); }
 .hint { font-size: 11px; color: var(--text-muted); }
 .footer-note { text-align: center; color: var(--text-muted); font-size: 11px; margin-top: 30px; }
 .empty-state { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 13px; }
+
+/* ---------- 稽核工作站：異常嚴重度徽章、清單小工具 ---------- */
+.sev-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+.sev-high { background: var(--status-critical); }
+.sev-medium { background: var(--status-serious); }
+.sev-low { background: var(--status-warning); color: #3a2a00; }
+.sev-info { background: var(--status-good); }
+.wl-note-input {
+  width: 100%;
+  min-width: 120px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.wl-status-select { font-size: 12px; padding: 3px 4px; }
+.audit-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.mini-count { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
+/* 稽核工作站表格中的長文字欄位（說明／摘要）需要換行，覆蓋 .data-table 預設的 white-space:nowrap */
+#auditAnomalyTable td:nth-child(5),
+#auditWatchlistTable td:nth-child(4),
+#auditCrossCheckTable td:nth-child(4),
+#auditCrossCheckTable td:nth-child(7) {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 460px;
+}

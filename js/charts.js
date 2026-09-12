@@ -459,13 +459,14 @@ const Charts = (() => {
 
   // ---------------- 事故 vs 人口/縣市 ----------------
 
-  function renderPopRate(counties, year) {
+  // accType：選填，指定時只計入該事故類型(大類別)的事故件數（不篩選則計入全部類型）
+  function renderPopRate(counties, year, accType) {
     const pop = new Map();
     INDICATORS.filter(i => i.indicator === '男性人口(人)' && i.year === year && counties.includes(i.county))
       .forEach(i => pop.set(i.county, (pop.get(i.county) || 0) + i.value));
     INDICATORS.filter(i => i.indicator === '女性人口(人)' && i.year === year && counties.includes(i.county))
       .forEach(i => pop.set(i.county, (pop.get(i.county) || 0) + i.value));
-    const accInYear = ACCIDENTS.filter(a => a.year === year && counties.includes(a.county));
+    const accInYear = ACCIDENTS.filter(a => a.year === year && counties.includes(a.county) && (!accType || a.accTypeMajor === accType));
     const accByCounty = Util.sumBy(accInYear, a => a.county, () => 1);
     const rows = counties.map(c => {
       const p = pop.get(c) || 0;
@@ -528,9 +529,11 @@ const Charts = (() => {
   }
 
   // yearSel: 數字年度，或 'all' 代表全部年度加總／平均。showLabels：是否在圖上直接標示縣市名稱。
-  function renderDensityScatter(counties, yearSel, showLabels) {
+  // accType：選填，指定時只計入該事故類型(大類別)的事故件數。
+  function renderDensityScatter(counties, yearSel, showLabels, accType) {
     const years = META.accidentYears;
     const isAll = yearSel === 'all' || yearSel == null;
+    const accMatches = a => !accType || a.accTypeMajor === accType;
     const points = [];
     counties.forEach(c => {
       let popDensity = null, accDensity = null;
@@ -544,7 +547,7 @@ const Charts = (() => {
           if (d != null) densVals.push(d);
         });
         if (area == null || densVals.length === 0) return;
-        const totalAcc = ACCIDENTS.filter(a => a.county === c).length;
+        const totalAcc = ACCIDENTS.filter(a => a.county === c && accMatches(a)).length;
         popDensity = densVals.reduce((s, v) => s + v, 0) / densVals.length;
         accDensity = totalAcc / area;
       } else {
@@ -552,7 +555,7 @@ const Charts = (() => {
         const area = computeAreaSqKm(c, y);
         const dens = indicatorValue('人口密度(人/平方公里)', c, y);
         if (area == null || dens == null) return;
-        const accCount = ACCIDENTS.filter(a => a.county === c && a.year === y).length;
+        const accCount = ACCIDENTS.filter(a => a.county === c && a.year === y && accMatches(a)).length;
         popDensity = dens;
         accDensity = accCount / area;
       }

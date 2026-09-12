@@ -218,15 +218,25 @@
   }
 
   function renderPopulationTab(accidents) {
-    const counties = [...State.filters.counties];
+    const sidebarCounties = [...State.filters.counties];
+    const popCountySel = document.getElementById('popCountySelect');
+    const focusCounty = popCountySel ? popCountySel.value : '';
+    // 「縣市」下拉為本頁專屬的篩選條件：選定特定縣市時，下方兩圖只顯示該縣市
+    // （不受側邊欄縣市勾選影響）；選「全部」則沿用側邊欄目前勾選的縣市。
+    const counties = focusCounty ? [focusCounty] : sidebarCounties;
+    const popAccTypeSel = document.getElementById('popAccTypeSelect');
+    const accType = popAccTypeSel ? popAccTypeSel.value : '';
+
     const year = Number(document.getElementById('popYearSelect').value);
-    Charts.renderPopRate(counties, year);
+    Charts.renderPopRate(counties, year, accType);
+
     const densityYearSel = document.getElementById('densityYearSelect');
     const densityYear = densityYearSel ? densityYearSel.value : 'all';
     const densityLabelToggle = document.getElementById('densityShowLabelsToggle');
     const densityShowLabels = !!(densityLabelToggle && densityLabelToggle.checked);
-    Charts.renderDensityScatter(counties, densityYear, densityShowLabels);
-    Charts.renderLongTrend(counties);
+    Charts.renderDensityScatter(counties, densityYear, densityShowLabels, accType);
+
+    Charts.renderLongTrend(sidebarCounties);
   }
 
   function renderTableTab(accidents) {
@@ -245,6 +255,7 @@
       case 'enforcement': renderEnforcementTab(accidents); break;
       case 'population': renderPopulationTab(accidents); break;
       case 'improve': Improve.render(); break;
+      case 'audit': Audit.render(); break;
       case 'tenders': Tenders.render(); break;
       case 'table': renderTableTab(accidents); break;
     }
@@ -352,6 +363,21 @@
     }
     const densityLabelToggle = document.getElementById('densityShowLabelsToggle');
     if (densityLabelToggle) densityLabelToggle.addEventListener('change', renderCurrentTab);
+
+    const popCountySel = document.getElementById('popCountySelect');
+    if (popCountySel) {
+      popCountySel.innerHTML = '<option value="">全部（依側邊欄設定）</option>' +
+        META.counties.map(c => `<option value="${c}">${c}</option>`).join('');
+      popCountySel.value = '';
+      popCountySel.addEventListener('change', renderCurrentTab);
+    }
+    const popAccTypeSel = document.getElementById('popAccTypeSelect');
+    if (popAccTypeSel) {
+      popAccTypeSel.innerHTML = '<option value="">全部事故類型</option>' +
+        State.uniqueValues('accTypeMajor').map(t => `<option value="${t}">${t}</option>`).join('');
+      popAccTypeSel.value = '';
+      popAccTypeSel.addEventListener('change', renderCurrentTab);
+    }
   }
 
   // ---------------- 地圖導航：縣市/鄉鎮跳轉、座標定位、自訂座標環域 ----------------
@@ -674,6 +700,7 @@
     MapView.init();
     Hotspot.init();
     Improve.init();
+    Audit.init();
     Tenders.init();
 
     State.onChange(() => { tablePage = 1; renderCurrentTab(); });
