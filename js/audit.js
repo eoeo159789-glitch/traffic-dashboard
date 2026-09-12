@@ -274,58 +274,63 @@ const Audit = (() => {
 
   // ---------------- 審計意見 vs 標案 交叉比對 ----------------
 
-  // 只有這兩個子標籤能對應到標案分類；AUDIT_OPINIONS_TRAFFIC.tagItems 已針對這兩個
-  // 標籤各自列出「實際提到該類關鍵字」的具體審核意見句子（依標籤分組），做為交叉
-  // 比對「初判」的具體依據，而不是只憑整列的意見則數或跟比對無關的代表性摘要。
+  // 「交通」領域審核意見的子標籤分類，與「審計意見統計」頁完全一致（依實際出現頻率排序）；
+  // 其中只有前兩個子標籤在「工程經費(標案)」目前的資料範圍內能對應到具體標案分類——
+  // 公共運輸與客運鐵路／停車管理／電動車與淨零運具／港埠與航空目前完全沒有對應分類的
+  // 標案資料（本站標案資料僅涵蓋科技執法／標誌標線／人行道／道路工程／道路改善／拓寬
+  // 工程六類），這是標案資料涵蓋範圍的限制，不代表這些子標籤沒有意見或不重要。
+  const ALL_TAGS = ['道路安全與路口工程', '科技執法與監理', '公共運輸與客運鐵路', '停車管理', '電動車與淨零運具', '港埠與航空'];
   const TAG_TO_TENDER_CATS = {
     '道路安全與路口工程': ['道路工程', '標誌標線', '人行道', '道路改善', '拓寬工程'],
     '科技執法與監理': ['科技執法'],
   };
 
+  // 交叉比對的最小單位改為「縣市 × 年度 × 子標籤」（而不是整個縣市年度合併看待），
+  // 這樣「相關子標籤」欄位才能反映『審計意見統計』頁完整的分類系統，也才能依子標籤篩選——
+  // 先前版本只挑「能對應標案分類」的兩個子標籤，其餘子標籤即使存在也完全不會出現在畫面上。
   function crossCheckRows() {
     if (!window.AUDIT_OPINIONS_TRAFFIC || !window.TENDERS) return [];
-    return AUDIT_OPINIONS_TRAFFIC.map(o => {
-      const comparableCats = new Set();
-      const matchedTagNames = [];
-      const matchedTitles = [];
-      Object.keys(TAG_TO_TENDER_CATS).forEach(tag => {
-        if (!(o.tags || []).includes(tag)) return;
+    const out = [];
+    AUDIT_OPINIONS_TRAFFIC.forEach(o => {
+      (o.tags || []).forEach(tag => {
         const items = (o.tagItems && o.tagItems[tag]) || [];
-        if (!items.length) return; // 該標籤雖在整列標籤中，但沒有具體意見句可佐證，不採計
-        matchedTagNames.push(tag);
-        TAG_TO_TENDER_CATS[tag].forEach(c => comparableCats.add(c));
-        items.forEach(t => { if (!matchedTitles.includes(t)) matchedTitles.push(t); });
-      });
-      if (comparableCats.size === 0 || matchedTitles.length === 0) {
-        return Object.assign({}, o, {
-          comparableCats: [], matchedTagNames: [], matchedTitles: [],
-          matchCount: 0, matchAmount: 0, verdict: 'not_comparable',
+        const tenderCats = TAG_TO_TENDER_CATS[tag];
+        let verdict, comparableCats = [], matchCount = 0, matchAmount = 0;
+        if (!tenderCats) {
+          // 此子標籤在「工程經費(標案)」中沒有對應的標案分類，並非查無標案，是無從比對。
+          verdict = 'not_applicable';
+        } else if (!items.length) {
+          // 該子標籤雖標註在這個縣市年度上，但抓不到「實際提到這個子標籤內容」的具體意見句。
+          verdict = 'no_evidence';
+        } else {
+          comparableCats = tenderCats;
+          // TENDERS.records 的 awardYear 是民國年（110~115），審計意見的 year 是西元年
+          // （2021~2025），比對前先換算成同一套年份系統，避免年份沒對齊導致恆為「查無」。
+          const matches = TENDERS.records.filter(r =>
+            r.performLocCounty === o.county &&
+            tenderCats.includes(r.category) &&
+            r.awardYear != null && Math.abs((r.awardYear + 1911) - o.year) <= 1
+          );
+          matchCount = matches.length;
+          matchAmount = matches.reduce((s, r) => s + (r.totalAmount || 0), 0);
+          verdict = matchCount === 0 ? 'no_match' : 'has_match';
+        }
+        out.push({
+          county: o.county, year: o.year, n: o.n, rep: o.rep,
+          tag, matchedTitles: items, comparableCats, matchCount, matchAmount, verdict,
         });
-      }
-      // 修正：TENDERS.records 的 awardYear 是民國年（110~115），而審計意見的
-      // year 是西元年（2021~2025），先前直接相減比對，等於恆為「查無對應標案」
-      // ——這不是真的查無標案，是年份系統沒對齊，先前版本的比對結果因此不可信。
-      const matches = TENDERS.records.filter(r =>
-        r.performLocCounty === o.county &&
-        comparableCats.has(r.category) &&
-        r.awardYear != null && Math.abs((r.awardYear + 1911) - o.year) <= 1
-      );
-      const matchAmount = matches.reduce((s, r) => s + (r.totalAmount || 0), 0);
-      return Object.assign({}, o, {
-        comparableCats: [...comparableCats], matchedTagNames, matchedTitles,
-        matchCount: matches.length, matchAmount,
-        verdict: matches.length === 0 ? 'no_match' : 'has_match',
       });
-    }).sort((a, b) => {
-      const rank = { no_match: 0, has_match: 1, not_comparable: 2 };
-      return rank[a.verdict] - rank[b.verdict] || b.matchedTitles.length - a.matchedTitles.length;
     });
+    const rank = { no_match: 0, has_match: 1, no_evidence: 2, not_applicable: 3 };
+    out.sort((a, b) => rank[a.verdict] - rank[b.verdict] || a.county.localeCompare(b.county) || b.year - a.year);
+    return out;
   }
 
   const VERDICT_LABEL = {
     no_match: '<span class="sev-badge sev-high">有具體意見／查無對應標案</span>',
     has_match: '<span class="sev-badge sev-info">已有對應標案</span>',
-    not_comparable: '<span class="sev-badge sev-low">無可比對依據</span>',
+    no_evidence: '<span class="sev-badge sev-low">無具體意見句可佐證</span>',
+    not_applicable: '<span class="sev-badge sev-low">此子標籤無對應標案分類</span>',
   };
 
   // ---------------- 待查／可疑案件清單（localStorage） ----------------
@@ -496,34 +501,31 @@ const Audit = (() => {
     if (!table) return;
     const countySel = document.getElementById('auditCrossCountySelect');
     const yearSel = document.getElementById('auditCrossYearSelect');
+    const tagSel = document.getElementById('auditCrossTagSelect');
     const countyVal = countySel ? countySel.value : '';
     const yearVal = yearSel ? yearSel.value : '';
+    const tagVal = tagSel ? tagSel.value : '';
     const all = crossCheckRows();
     lastCrossRows = all.filter(r =>
-      (!countyVal || r.county === countyVal) && (!yearVal || String(r.year) === yearVal)
+      (!countyVal || r.county === countyVal) && (!yearVal || String(r.year) === yearVal) && (!tagVal || r.tag === tagVal)
     );
     const countEl = document.getElementById('auditCrossCount');
     if (countEl) countEl.textContent = `符合篩選 ${lastCrossRows.length} 筆／共 ${all.length} 筆`;
     if (!lastCrossRows.length) {
-      table.innerHTML = '<tbody><tr><td class="hint" style="padding:16px 4px">目前縣市／年度篩選條件下沒有資料，可嘗試改選「全部」。</td></tr></tbody>';
+      table.innerHTML = '<tbody><tr><td class="hint" style="padding:16px 4px">目前縣市／年度／子標籤篩選條件下沒有資料，可嘗試改選「全部」。</td></tr></tbody>';
       return;
     }
     table.innerHTML =
       '<thead><tr><th>縣市</th><th>年度</th><th>相關子標籤</th><th>同期(±1年)相關標案</th><th>初判</th><th>依據（實際審核意見句）</th><th></th></tr></thead><tbody>' +
       lastCrossRows.map((r, i) => {
-        const id = `audit_cross__${r.county}__${r.year}`;
-        const matchText = r.verdict === 'not_comparable' ? '—' : `${r.matchCount} 筆／${Util.fmtNum(r.matchAmount)} 元`;
-        const tagText = r.verdict === 'not_comparable'
-          ? `${(r.tags || []).map(esc).join('、') || '（無標籤）'}（皆無法對應標案分類，或無具體意見句可佐證）`
-          : r.matchedTagNames.map(esc).join('、');
-        const basisText = r.verdict === 'not_comparable'
-          ? '—'
-          : r.matchedTitles.map(esc).join('；');
+        const id = `audit_cross__${r.county}__${r.year}__${r.tag}`;
+        const matchText = (r.verdict === 'not_applicable' || r.verdict === 'no_evidence') ? '—' : `${r.matchCount} 筆／${Util.fmtNum(r.matchAmount)} 元`;
+        const basisText = r.matchedTitles.length ? r.matchedTitles.map(esc).join('；') : '—';
         return `
         <tr>
           <td>${esc(r.county)}</td>
           <td>${esc(r.year)}</td>
-          <td>${tagText}</td>
+          <td>${esc(r.tag)}</td>
           <td>${matchText}</td>
           <td>${VERDICT_LABEL[r.verdict]}</td>
           <td>${basisText}</td>
@@ -537,10 +539,10 @@ const Audit = (() => {
         const r = lastCrossRows[Number(btn.dataset.idx)];
         if (!r) return;
         upsertWatchlist({
-          id: `audit_cross__${r.county}__${r.year}`,
+          id: `audit_cross__${r.county}__${r.year}__${r.tag}`,
           typeLabel: '審計意見／標案交叉比對',
           county: r.county, year: r.year,
-          detail: `${r.year}年「交通」領域審核意見中，子標籤「${r.matchedTagNames.join('、')}」有具體意見句：${r.matchedTitles.join('；')}。同縣市同期（±1年）在對應標案分類（${r.comparableCats.join('、')}）下查無標案。`,
+          detail: `${r.year}年「交通」領域審核意見中，子標籤「${r.tag}」有具體意見句：${r.matchedTitles.join('；')}。同縣市同期（±1年）在對應標案分類（${r.comparableCats.join('、')}）下查無標案。`,
         });
         renderCrossCheck();
         renderWatchlist();
@@ -604,6 +606,18 @@ const Audit = (() => {
         years.map(y => `<option value="${y}">${y}</option>`).join('');
       crossYearSel.value = '';
       crossYearSel.addEventListener('change', renderCrossCheck);
+    }
+    const crossTagSel = document.getElementById('auditCrossTagSelect');
+    if (crossTagSel && window.AUDIT_OPINIONS_TRAFFIC) {
+      // 分類與「審計意見統計」頁一致，依 ALL_TAGS 的固定順序（而非字母序）列出，
+      // 只保留「交通」領域縣市層級資料中實際出現過的子標籤。
+      const tagsPresent = new Set();
+      AUDIT_OPINIONS_TRAFFIC.forEach(o => (o.tags || []).forEach(t => tagsPresent.add(t)));
+      const orderedTags = ALL_TAGS.filter(t => tagsPresent.has(t));
+      crossTagSel.innerHTML = '<option value="">全部子標籤</option>' +
+        orderedTags.map(t => `<option value="${t}">${t}${TAG_TO_TENDER_CATS[t] ? '' : '（無對應標案分類）'}</option>`).join('');
+      crossTagSel.value = '';
+      crossTagSel.addEventListener('change', renderCrossCheck);
     }
   }
 
