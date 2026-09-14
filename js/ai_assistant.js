@@ -17,7 +17,7 @@ const AIAssistant = (() => {
   const HISTORY_KEY = 'ai_assistant_history_v1';
   const MAX_HISTORY_TURNS = 12; // 送往 API 的最近對話輪數上限，避免 payload 過大
 
-  let settings = { provider: 'gemini', apiKey: '', geminiModel: 'gemini-2.5-flash', openaiBaseUrl: '', openaiModel: '' };
+  let settings = { provider: 'gemini', apiKey: '', geminiModel: 'gemini-3.6-flash', openaiBaseUrl: '', openaiModel: '' };
   let history = []; // [{role:'user'|'assistant', text}]
   let sending = false;
 
@@ -77,6 +77,12 @@ const AIAssistant = (() => {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) settings = Object.assign(settings, JSON.parse(raw));
     } catch (e) { /* 忽略壞掉的儲存資料 */ }
+    // 2026-09：gemini-2.5-flash 已對新用戶停用，若使用者先前儲存的仍是這個舊模型，
+    // 自動升級為 gemini-3.6-flash，避免舊用戶一開啟就遇到 API 錯誤。
+    if (settings.geminiModel === 'gemini-2.5-flash') {
+      settings.geminiModel = 'gemini-3.6-flash';
+      saveSettingsToStorage();
+    }
   }
 
   function saveSettingsToStorage() {
@@ -148,7 +154,7 @@ const AIAssistant = (() => {
     const apiKey = document.getElementById('aiApiKey').value.trim();
     const geminiModelSel = document.getElementById('aiGeminiModel').value;
     const geminiModelCustom = document.getElementById('aiGeminiModelCustom').value.trim();
-    const geminiModel = geminiModelSel === '__custom__' ? (geminiModelCustom || 'gemini-2.5-flash') : geminiModelSel;
+    const geminiModel = geminiModelSel === '__custom__' ? (geminiModelCustom || 'gemini-3.6-flash') : geminiModelSel;
     const openaiBaseUrl = document.getElementById('aiOpenAIBaseUrl').value.trim().replace(/\/+$/, '');
     const openaiModel = document.getElementById('aiOpenAIModel').value.trim();
     return { provider, apiKey, geminiModel, openaiBaseUrl, openaiModel };
@@ -203,6 +209,13 @@ const AIAssistant = (() => {
     const data = await resp.json().catch(() => null);
     if (!resp.ok) {
       const msg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
+      if (/no longer available|not found|is not supported|deprecated/i.test(msg)) {
+        throw new Error(
+          `Gemini API 錯誤：${msg}\n` +
+          `→ 這通常表示目前選用的模型（${cfg.geminiModel}）已被 Google 停用或不再開放新用戶使用。` +
+          `請回到上方「AI 客服設定」，將模型改選為 gemini-3.6-flash 或 gemini-3.8-flash 後重新測試連線。`
+        );
+      }
       throw new Error(`Gemini API 錯誤：${msg}`);
     }
     const text = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
@@ -342,7 +355,7 @@ const AIAssistant = (() => {
 
     document.getElementById('aiClearSettingsBtn').addEventListener('click', () => {
       if (!confirm('確定要清除本機儲存的 API 金鑰與設定嗎？此動作無法復原。')) return;
-      settings = { provider: 'gemini', apiKey: '', geminiModel: 'gemini-2.5-flash', openaiBaseUrl: '', openaiModel: '' };
+      settings = { provider: 'gemini', apiKey: '', geminiModel: 'gemini-3.6-flash', openaiBaseUrl: '', openaiModel: '' };
       try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* 忽略 */ }
       syncSettingsForm();
       document.getElementById('aiTestResult').textContent = '已清除。';

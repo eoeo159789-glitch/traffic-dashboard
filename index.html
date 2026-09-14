@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>臺灣交通事故資料整合分析模組</title>
-<link rel="stylesheet" href="css/style.css?v=20260916">
+<link rel="stylesheet" href="css/style.css?v=20260917">
 <!-- Leaflet 地圖 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
@@ -651,9 +651,10 @@
         <div class="nav-row" id="aiGeminiRow">
           <span class="nav-label">模型：</span>
           <select id="aiGeminiModel">
-            <option value="gemini-2.5-flash">gemini-2.5-flash（推薦，速度快）</option>
-            <option value="gemini-2.5-pro">gemini-2.5-pro（回答品質較高，較慢）</option>
-            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+            <option value="gemini-3.6-flash">gemini-3.6-flash（推薦，速度快）</option>
+            <option value="gemini-3.8-flash">gemini-3.8-flash（最新，回答品質較高）</option>
+            <option value="gemini-2.5-flash">gemini-2.5-flash（部分帳號已停用，若無法使用請改選上方選項）</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
             <option value="__custom__">自訂型號名稱…</option>
           </select>
           <input type="text" id="aiGeminiModelCustom" class="search-input" placeholder="輸入完整模型名稱" hidden>
@@ -711,42 +712,42 @@
 
 <!-- 資料檔（由 scripts/build_data.py 產生） -->
 <!-- 版本查詢字串（?v=）用於避免靜態主機／瀏覽器快取到更新前的舊檔，每次更新資料或程式碼請一併更新此版號 -->
-<script src="data/meta.data.js?v=20260916"></script>
-<script src="data/accidents.data.js?v=20260916"></script>
-<script src="data/parties.data.js?v=20260916"></script>
-<script src="data/enforcement.data.js?v=20260916"></script>
-<script src="data/indicators.data.js?v=20260916"></script>
-<script src="data/enforcement_fines.data.js?v=20260916"></script>
-<script src="data/a2_export_manifest.data.js?v=20260916"></script>
-<script src="data/points_hotspot1000.data.js?v=20260916"></script>
-<script src="data/points_safety799.data.js?v=20260916"></script>
-<script src="data/points_tech_enforcement.data.js?v=20260916"></script>
-<script src="data/geo_jump.data.js?v=20260916"></script>
-<script src="data/point_buffer_a1.data.js?v=20260916"></script>
-<script src="data/point_buffer_a2.data.js?v=20260916"></script>
-<script src="data/a2_by_county.data.js?v=20260916"></script>
-<script src="data/a2_by_month.data.js?v=20260916"></script>
-<script src="data/a2_by_hour.data.js?v=20260916"></script>
-<script src="data/a2_acc_type_minor.data.js?v=20260916"></script>
-<script src="data/a2_acc_type_major.data.js?v=20260916"></script>
-<script src="data/a2_cause_minor.data.js?v=20260916"></script>
-<script src="data/a2_age_bracket.data.js?v=20260916"></script>
-<script src="data/a2_crosstab.data.js?v=20260916"></script>
-<script src="data/a2_geo.data.js?v=20260916"></script>
-<script src="data/tenders.data.js?v=20260916"></script>
-<script src="data/audit_opinions_traffic.data.js?v=20260916"></script>
+<script src="data/meta.data.js?v=20260917"></script>
+<script src="data/accidents.data.js?v=20260917"></script>
+<script src="data/parties.data.js?v=20260917"></script>
+<script src="data/enforcement.data.js?v=20260917"></script>
+<script src="data/indicators.data.js?v=20260917"></script>
+<script src="data/enforcement_fines.data.js?v=20260917"></script>
+<script src="data/a2_export_manifest.data.js?v=20260917"></script>
+<script src="data/points_hotspot1000.data.js?v=20260917"></script>
+<script src="data/points_safety799.data.js?v=20260917"></script>
+<script src="data/points_tech_enforcement.data.js?v=20260917"></script>
+<script src="data/geo_jump.data.js?v=20260917"></script>
+<script src="data/point_buffer_a1.data.js?v=20260917"></script>
+<script src="data/point_buffer_a2.data.js?v=20260917"></script>
+<script src="data/a2_by_county.data.js?v=20260917"></script>
+<script src="data/a2_by_month.data.js?v=20260917"></script>
+<script src="data/a2_by_hour.data.js?v=20260917"></script>
+<script src="data/a2_acc_type_minor.data.js?v=20260917"></script>
+<script src="data/a2_acc_type_major.data.js?v=20260917"></script>
+<script src="data/a2_cause_minor.data.js?v=20260917"></script>
+<script src="data/a2_age_bracket.data.js?v=20260917"></script>
+<script src="data/a2_crosstab.data.js?v=20260917"></script>
+<script src="data/a2_geo.data.js?v=20260917"></script>
+<script src="data/tenders.data.js?v=20260917"></script>
+<script src="data/audit_opinions_traffic.data.js?v=20260917"></script>
 
 <!-- 應用程式邏輯 -->
-<script src="js/util.js?v=20260916"></script>
-<script src="js/state.js?v=20260916"></script>
-<script src="js/charts.js?v=20260916"></script>
-<script src="js/map.js?v=20260916"></script>
-<script src="js/hotspot.js?v=20260916"></script>
-<script src="js/improve.js?v=20260916"></script>
-<script src="js/tenders.js?v=20260916"></script>
-<script src="js/audit.js?v=20260916"></script>
-<script src="js/ai_assistant.js?v=20260916"></script>
-<script src="js/export.js?v=20260916"></script>
-<script src="js/app.js?v=20260916"></script>
+<script src="js/util.js?v=20260917"></script>
+<script src="js/state.js?v=20260917"></script>
+<script src="js/charts.js?v=20260917"></script>
+<script src="js/map.js?v=20260917"></script>
+<script src="js/hotspot.js?v=20260917"></script>
+<script src="js/improve.js?v=20260917"></script>
+<script src="js/tenders.js?v=20260917"></script>
+<script src="js/audit.js?v=20260917"></script>
+<script src="js/ai_assistant.js?v=20260917"></script>
+<script src="js/export.js?v=20260917"></script>
+<script src="js/app.js?v=20260917"></script>
 </body>
 </html>
