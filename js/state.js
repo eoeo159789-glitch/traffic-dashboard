@@ -229,6 +229,38 @@ const State = (() => {
     return { a1Count, a1Deaths, a1Injuries, a2Count, a2Injuries, exactA2: false };
   }
 
+  // ---- 科技執法涵蓋查詢：以易肇事路口／人行安全點位為中心，找半徑內有幾處科技執法設備 ----
+  // 與 pointStatsAtRadius／aggregateBufferStats（算「點位半徑內有多少事故」）方向相反：
+  // 這裡算「點位半徑內有多少科技執法設備」，供「圖3-2」報告表格同等邏輯的網站即時查詢版本。
+  // 直線距離計算方式與 build_buffer_compare_xlsx.py／Util.distMeters 一致（等距圓柱投影近似，短距離誤差可忽略）。
+  function techEnfWithinRadius(point, radiusM) {
+    const devices = techEnforcementPointsWithCoords();
+    let nearestM = null;
+    const matched = [];
+    devices.forEach(d => {
+      const dist = Util.distMeters(point.lat, point.lng, d.lat, d.lng);
+      if (nearestM === null || dist < nearestM) nearestM = dist;
+      if (dist <= radiusM) matched.push(Object.assign({}, d, { distanceM: dist }));
+    });
+    matched.sort((a, b) => a.distanceM - b.distanceM);
+    return { count: matched.length, nearestM, devices: matched };
+  }
+
+  // 多點合計（去重）：同一處科技執法設備若同時落在多個查詢點位的半徑內，只計算一次，
+  // 避免點位彼此靠近時，同一處設備被重複計入、導致涵蓋數字失真膨脹（邏輯同 aggregateBufferStats）。
+  function aggregateTechEnfCoverage(points, radiusM) {
+    const devices = techEnforcementPointsWithCoords();
+    const matched = [];
+    devices.forEach(d => {
+      for (let i = 0; i < points.length; i++) {
+        const dist = Util.distMeters(points[i].lat, points[i].lng, d.lat, d.lng);
+        if (dist <= radiusM) { matched.push(Object.assign({}, d, { distanceM: dist })); break; }
+      }
+    });
+    matched.sort((a, b) => a.distanceM - b.distanceM);
+    return { count: matched.length, devices: matched };
+  }
+
   return {
     DIMENSIONS, filters, uniqueValues, matches, filtered, invalidate,
     toggleInSet, setAll, resetAll, onChange, partiesFor,
@@ -237,5 +269,6 @@ const State = (() => {
     hotspotPoints, safety799Points, techEnforcementPoints, techEnforcementPointsWithCoords,
     pointsByDataset, bufferA1For, bufferA2For, geoJump, customBufferStats,
     pointStatsAtRadius, aggregateBufferStats,
+    techEnfWithinRadius, aggregateTechEnfCoverage,
   };
 })();

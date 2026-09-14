@@ -4,7 +4,7 @@
 // 另提供座標定位／縣市鄉鎮跳轉、自訂座標環域分析
 // ============================================================
 const MapView = (() => {
-  let map, clusterLayer, a1HeatLayer, a2HeatLayer, hotspotLayer, safety799Layer, techEnfLayer, customMarker, customCircle, customMultiLayer;
+  let map, clusterLayer, a1HeatLayer, a2HeatLayer, hotspotLayer, safety799Layer, techEnfLayer, customMarker, customCircle, customMultiLayer, techCoverageLayer;
   const DEFAULT_POPUP_RADIUS = 200; // 點位彈窗預設顯示的環域半徑（公尺）
 
   function init() {
@@ -281,10 +281,73 @@ const MapView = (() => {
     else map.fitBounds(bounds, { padding: [40, 40] });
   }
 
+  // 多點合計的科技執法涵蓋查詢（未指定單一點位）：每個查詢點位各畫一個環域圈（綠色）＋合計後
+  // 去重的科技執法設備標記（紅點）。點位數過多時地圖僅畫出前 MAP_DRAW_CAP 個圈，統計數字仍為完整合計。
+  function setAggregateWithDeviceMarkers(points, radiusM, devices, mapDrawCap) {
+    if (!map) init();
+    if (customMarker) { map.removeLayer(customMarker); customMarker = null; }
+    if (customCircle) { map.removeLayer(customCircle); customCircle = null; }
+    if (customMultiLayer) { map.removeLayer(customMultiLayer); customMultiLayer = null; }
+    if (techCoverageLayer) { map.removeLayer(techCoverageLayer); techCoverageLayer = null; }
+    if (!points || points.length === 0) return;
+    const cap = mapDrawCap || points.length;
+    customMultiLayer = L.layerGroup();
+    const bounds = [];
+    points.slice(0, cap).forEach(p => {
+      L.circleMarker([p.lat, p.lng], { radius: 4, color: '#0ca30c', weight: 2, fillOpacity: 0.9 }).addTo(customMultiLayer);
+      L.circle([p.lat, p.lng], { radius: radiusM, color: '#0ca30c', weight: 1.5, fillOpacity: 0.06 }).addTo(customMultiLayer);
+      bounds.push([p.lat, p.lng]);
+    });
+    customMultiLayer.addTo(map);
+    techCoverageLayer = L.layerGroup();
+    (devices || []).forEach(d => {
+      const marker = L.circleMarker([d.lat, d.lng], { radius: 6, color: '#e34948', fillColor: '#e34948', fillOpacity: 0.9, weight: 1.5 });
+      marker.bindPopup(`
+        <b>${d.county || ''}${d.district || ''}</b>（${d.deviceType || '科技執法'}）<br>
+        ${d.loc || ''}<br>
+        距最近一個查詢點位約 ${Math.round(d.distanceM).toLocaleString()} 公尺
+      `);
+      techCoverageLayer.addLayer(marker);
+      bounds.push([d.lat, d.lng]);
+    });
+    techCoverageLayer.addTo(map);
+    if (bounds.length === 1) map.setView(bounds[0], 15);
+    else map.fitBounds(bounds, { padding: [40, 40] });
+  }
+
   function clearCustomPoint() {
     if (customMarker) { map.removeLayer(customMarker); customMarker = null; }
     if (customCircle) { map.removeLayer(customCircle); customCircle = null; }
     if (customMultiLayer) { map.removeLayer(customMultiLayer); customMultiLayer = null; }
+    if (techCoverageLayer) { map.removeLayer(techCoverageLayer); techCoverageLayer = null; }
+  }
+
+  // 單一路口/點位的科技執法涵蓋查詢：中心點（綠色）＋半徑圈＋範圍內科技執法設備（紅點，可點擊查看距離）
+  function setPointWithDeviceMarkers(lat, lng, radiusM, devices) {
+    if (!map) init();
+    if (customMarker) { map.removeLayer(customMarker); customMarker = null; }
+    if (customCircle) { map.removeLayer(customCircle); customCircle = null; }
+    if (customMultiLayer) { map.removeLayer(customMultiLayer); customMultiLayer = null; }
+    if (techCoverageLayer) { map.removeLayer(techCoverageLayer); techCoverageLayer = null; }
+    customMarker = L.marker([lat, lng], {
+      icon: L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:#0ca30c;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.5)"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }),
+    }).addTo(map);
+    customCircle = L.circle([lat, lng], { radius: radiusM, color: '#0ca30c', weight: 2, fillOpacity: 0.08 }).addTo(map);
+    techCoverageLayer = L.layerGroup();
+    const bounds = [[lat, lng]];
+    (devices || []).forEach(d => {
+      const marker = L.circleMarker([d.lat, d.lng], { radius: 6, color: '#e34948', fillColor: '#e34948', fillOpacity: 0.9, weight: 1.5 });
+      marker.bindPopup(`
+        <b>${d.county || ''}${d.district || ''}</b>（${d.deviceType || '科技執法'}）<br>
+        ${d.loc || ''}<br>
+        距查詢中心點約 ${Math.round(d.distanceM).toLocaleString()} 公尺
+      `);
+      techCoverageLayer.addLayer(marker);
+      bounds.push([d.lat, d.lng]);
+    });
+    techCoverageLayer.addTo(map);
+    if (bounds.length > 1) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+    else map.setView([lat, lng], 16);
   }
 
   async function exportPng() {
@@ -299,5 +362,6 @@ const MapView = (() => {
   return {
     init, render, invalidateSize, exportPng,
     jumpTo, setCustomPoint, updateCustomRadius, clearCustomPoint, setCustomPoints,
+    setPointWithDeviceMarkers, setAggregateWithDeviceMarkers,
   };
 })();

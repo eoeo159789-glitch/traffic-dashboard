@@ -635,6 +635,208 @@
     });
   }
 
+  // ---------------- 易肇事路口科技執法涵蓋查詢（地圖分頁）----------------
+  // 與「熱點查詢」方向相反：熱點查詢是「點位半徑內有多少事故」，這裡是「點位半徑內有多少科技執法設備」。
+
+  function tcColumnsFor(dataset) {
+    const base = dataset === 'safety799'
+      ? [
+          { key: 'id', label: '編號' },
+          { key: 'source', label: '資料來源' },
+          { key: 'county', label: '縣市' },
+          { key: 'township', label: '鄉鎮市區' },
+          { key: 'position', label: '路口位置' },
+          { key: 'address', label: '完整地址' },
+        ]
+      : [
+          { key: 'id', label: '編號' },
+          { key: 'county', label: '縣市' },
+          { key: 'township', label: '鄉鎮市區' },
+          { key: 'name', label: '路口名稱' },
+          { key: 'rank', label: '原始排行', numeric: true },
+        ];
+    return base.concat([
+      { key: 'techCount', label: '半徑內科技執法點位數', numeric: true },
+      { key: 'nearestM', label: '最近一處科技執法設備距離(公尺)', numeric: true, value: r => r.nearestM == null ? '' : Math.round(r.nearestM) },
+      { key: 'lat', label: '緯度' },
+      { key: 'lng', label: '經度' },
+    ]);
+  }
+
+  function setupTechCoverageQuery() {
+    const datasetSel = document.getElementById('tcDatasetSelect');
+    const countySel = document.getElementById('tcCountySelect');
+    const townshipSel = document.getElementById('tcTownshipSelect');
+    const searchInput = document.getElementById('tcSearchInput');
+    const pointSel = document.getElementById('tcPointSelect');
+    const radiusInput = document.getElementById('tcRadiusInput');
+    const queryBtn = document.getElementById('tcQueryBtn');
+    const exportBtn = document.getElementById('tcExportBtn');
+    const resultRow = document.getElementById('tcResultRow');
+    const resultText = document.getElementById('tcResultText');
+    const clearBtn = document.getElementById('tcClearBtn');
+    const deviceTable = document.getElementById('tcDeviceTable');
+
+    countySel.innerHTML = '<option value="">全部縣市</option>' + META.counties.map(c => `<option value="${c}">${c}</option>`).join('');
+
+    function labelFor(p, dataset) {
+      const nameLike = dataset === 'safety799' ? (p.position || p.address || p.id) : (p.name || p.id);
+      return `${p.county || ''}${p.township || ''} ${nameLike}`;
+    }
+
+    function currentFilteredPoints() {
+      const dataset = datasetSel.value;
+      const county = countySel.value;
+      const township = townshipSel.value;
+      const kw = searchInput.value.trim().toLowerCase();
+      const pts = State.pointsByDataset(dataset);
+      return pts.filter(p => {
+        if (county && p.county !== county) return false;
+        if (township && p.township !== township) return false;
+        if (!kw) return true;
+        const hay = [p.name, p.position, p.address, p.township, p.county].filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(kw);
+      });
+    }
+
+    function refreshTownshipOptions() {
+      const dataset = datasetSel.value;
+      const county = countySel.value;
+      const pts = State.pointsByDataset(dataset).filter(p => !county || p.county === county);
+      const townships = Array.from(new Set(pts.map(p => p.township).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+      const prev = townshipSel.value;
+      townshipSel.innerHTML = '<option value="">全部鄉鎮市區</option>' + townships.map(t => `<option value="${t}">${t}</option>`).join('');
+      townshipSel.value = townships.includes(prev) ? prev : '';
+    }
+
+    const MAP_DRAW_CAP = 300;
+    const DEVICE_TABLE_CAP = 500;
+
+    function refreshPointOptions() {
+      const dataset = datasetSel.value;
+      const filtered = currentFilteredPoints();
+      const limited = filtered.slice(0, 300);
+      const blankOpt = `<option value="">（不指定單一點位，直接依上方篩選條件合計查詢／匯出全部 ${filtered.length} 筆）</option>`;
+      pointSel.innerHTML = blankOpt + limited.map(p => `<option value="${p.id}">${labelFor(p, dataset)}</option>`).join('');
+      if (filtered.length > limited.length) {
+        const opt = document.createElement('option');
+        opt.disabled = true;
+        opt.textContent = `…符合 ${filtered.length} 筆，僅顯示前 ${limited.length} 筆可選，請輸入關鍵字或選擇縣市／鄉鎮縮小範圍以選擇單一點位`;
+        pointSel.appendChild(opt);
+      }
+      pointSel.value = '';
+    }
+
+    datasetSel.addEventListener('change', () => {
+      countySel.value = '';
+      refreshTownshipOptions();
+      refreshPointOptions();
+    });
+    countySel.addEventListener('change', () => {
+      refreshTownshipOptions();
+      refreshPointOptions();
+    });
+    townshipSel.addEventListener('change', refreshPointOptions);
+    searchInput.addEventListener('input', refreshPointOptions);
+
+    refreshTownshipOptions();
+    refreshPointOptions();
+
+    function clearTableNote() {
+      const prevNote = deviceTable.nextElementSibling;
+      if (prevNote && prevNote.tagName === 'P' && prevNote.dataset.tcNote) prevNote.remove();
+    }
+
+    function renderDeviceTable(devices) {
+      clearTableNote();
+      const shown = devices.slice(0, DEVICE_TABLE_CAP);
+      if (shown.length === 0) {
+        deviceTable.innerHTML = '<thead><tr><th>查詢結果</th></tr></thead><tbody><tr><td>（半徑內查無科技執法設備）</td></tr></tbody>';
+        return;
+      }
+      const cols = [
+        { key: 'distanceM', label: '距離(公尺)' },
+        { key: 'county', label: '縣市' },
+        { key: 'district', label: '行政區' },
+        { key: 'deviceType', label: '科技執法種類' },
+        { key: 'loc', label: '設置地點' },
+        { key: 'coordSourceLabel', label: '座標來源' },
+      ];
+      const thead = '<thead><tr>' + cols.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead>';
+      const tbody = '<tbody>' + shown.map(d => '<tr>' + cols.map(c => {
+        const v = c.key === 'distanceM' ? Math.round(d.distanceM).toLocaleString() : (d[c.key] ?? '');
+        return `<td>${v}</td>`;
+      }).join('') + '</tr>').join('') + '</tbody>';
+      deviceTable.innerHTML = thead + tbody;
+      if (devices.length > DEVICE_TABLE_CAP) {
+        const note = document.createElement('p');
+        note.className = 'hint';
+        note.dataset.tcNote = '1';
+        note.textContent = `共 ${devices.length.toLocaleString()} 處，表格僅列出距離最近的前 ${DEVICE_TABLE_CAP} 處（上方統計數字為完整合計，未被截斷）`;
+        deviceTable.after(note);
+      }
+    }
+
+    queryBtn.addEventListener('click', () => {
+      const dataset = datasetSel.value;
+      const pointId = pointSel.value;
+      const radius = Number(radiusInput.value);
+      if (!isFinite(radius) || radius <= 0) { alert('請輸入有效的半徑（公尺）'); return; }
+
+      if (pointId) {
+        // 指定單一路口／點位：查該點位半徑內有幾處科技執法設備
+        const pts = State.pointsByDataset(dataset);
+        const p = pts.find(x => x.id === pointId);
+        if (!p) return;
+        const s = State.techEnfWithinRadius(p, radius);
+        MapView.setPointWithDeviceMarkers(p.lat, p.lng, radius, s.devices);
+        const label = labelFor(p, dataset);
+        const nearestNote = s.nearestM == null ? '' : `／全部科技執法設備中最近一處距離約 ${Math.round(s.nearestM).toLocaleString()} 公尺`;
+        resultText.textContent = `${label}｜半徑 ${radius}m 內共有 ${Util.fmtNum(s.count)} 處科技執法設備${nearestNote}`;
+        renderDeviceTable(s.devices);
+      } else {
+        // 未指定單一點位：依目前縣市／鄉鎮／關鍵字篩選，一次查詢所有符合的點位。
+        // 同一處科技執法設備若同時落在多個點位半徑內，只算一次（去重），避免點位彼此靠近時重複膨脹。
+        const pts = currentFilteredPoints();
+        if (pts.length === 0) { alert('目前的縣市／鄉鎮／關鍵字篩選條件下沒有符合的點位'); return; }
+        const agg = State.aggregateTechEnfCoverage(pts, radius);
+        MapView.setAggregateWithDeviceMarkers(pts, radius, agg.devices, MAP_DRAW_CAP);
+        const scopeLabel = [countySel.value, townshipSel.value].filter(Boolean).join('') || '全部';
+        const capNote = pts.length > MAP_DRAW_CAP ? `（地圖僅顯示前 ${MAP_DRAW_CAP} 個點位的範圍圈，統計已包含全部 ${pts.length} 個點位）` : '';
+        resultText.textContent = `${scopeLabel}（共 ${pts.length} 個點位，設備已去重不重複計算）合計｜半徑 ${radius}m 內共涵蓋 ${Util.fmtNum(agg.count)} 處科技執法設備${capNote}`;
+        renderDeviceTable(agg.devices);
+      }
+      resultRow.hidden = false;
+      if (document.querySelector('.tab-btn[data-tab="map"]') && currentTab !== 'map') {
+        document.querySelector('.tab-btn[data-tab="map"]').click();
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      MapView.clearCustomPoint();
+      resultRow.hidden = true;
+      clearTableNote();
+      deviceTable.innerHTML = '';
+    });
+
+    exportBtn.addEventListener('click', () => {
+      const dataset = datasetSel.value;
+      const radius = Number(radiusInput.value);
+      if (!isFinite(radius) || radius <= 0) { alert('請輸入有效的半徑（公尺）'); return; }
+      const pts = currentFilteredPoints();
+      if (pts.length === 0) { alert('目前的縣市／鄉鎮／關鍵字篩選條件下沒有符合的點位可以匯出'); return; }
+      const rows = pts.map(p => {
+        const s = State.techEnfWithinRadius(p, radius);
+        return Object.assign({}, p, { techCount: s.count, nearestM: s.nearestM });
+      });
+      const cols = tcColumnsFor(dataset);
+      const csv = Util.toCsv(rows, cols);
+      const label = dataset === 'safety799' ? '人行安全補助799處' : '易肇事路口1000處';
+      const scope = [countySel.value, townshipSel.value].filter(Boolean).join('') || '全部';
+      Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${label}_${scope}_半徑${radius}m科技執法涵蓋統計_${Date.now()}.csv`);
+    });
+  }
+
   // ---------------- 按鈕事件 ----------------
 
   function setupButtons() {
@@ -697,6 +899,7 @@
     setupSidebarToggle();
     setupMapNav();
     setupHotspotQuery();
+    setupTechCoverageQuery();
     renderA2DownloadList();
     MapView.init();
     Hotspot.init();
