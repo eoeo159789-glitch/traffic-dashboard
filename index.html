@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>臺灣交通事故資料整合分析模組</title>
-<link rel="stylesheet" href="css/style.css?v=20260918">
+<link rel="stylesheet" href="css/style.css?v=20260919">
 <!-- Leaflet 地圖 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
@@ -216,7 +216,7 @@
           <button class="btn" id="tcClearBtn">✕ 清除查詢</button>
         </div>
         <div class="table-scroll"><table class="data-table" id="tcDeviceTable"></table></div>
-        <p class="hint">查「1000處易肇事路口（或799人行安全補助點位）周圍半徑內有多少科技執法點位」：可依縣市／鄉鎮市區／關鍵字先縮小清單範圍，從下拉選單選擇「單一路口」後按查詢，會顯示該路口半徑內共有幾處科技執法設備、以及最近一處設備的直線距離，並在地圖上以綠點標示路口、紅點標示範圍內的科技執法設備（可點擊紅點查看設備詳情），下方表格會列出所有落在半徑內的設備明細（依距離由近到遠排序）。若保持選單預設的「不指定單一點位」，會改為把目前篩選出的所有路口／點位一次合計查詢：地圖上顯示每個路口的範圍圈與合計後的科技執法設備標記，<strong>同一處設備若同時落在多個路口的半徑內只計算一次，不會重複計入</strong>。半徑可輸入 100／300／500 或任意自訂公尺數（輸入框旁提供 100/300/500 建議值可點選帶入）；直線距離計算方式與本平台報告「圖3-2」緩衝區比對表相同，採等距圓柱投影近似公式，短距離下誤差可忽略。科技執法設備座標僅計入本站有經緯度座標者（共1,615處，其中941處為官方公告座標，其餘為地理編碼推估座標，精度不一，詳見「地圖」圖層說明與報告第三章第五節）。「⬇ 匯出清單CSV」會依目前篩選條件，將清單中每個路口半徑內的科技執法設備數與最近距離一併匯出，供離線比對或報告引用。</p>
+        <p class="hint">查「1000處易肇事路口（或799人行安全補助點位）周圍半徑內有多少科技執法點位」：可依縣市／鄉鎮市區／關鍵字先縮小清單範圍，從下拉選單選擇「單一路口」後按查詢，會顯示該路口半徑內共有幾處科技執法設備、以及最近一處設備的直線距離，並在地圖上以綠點標示路口、紅點標示範圍內的科技執法設備（可點擊紅點查看設備詳情），下方表格會列出所有落在半徑內的設備明細（依距離由近到遠排序）。若保持選單預設的「不指定單一點位」，會改為把目前篩選出的所有路口／點位一次合計查詢：地圖上顯示每個路口的範圍圈與合計後的科技執法設備標記，<strong>同一處設備若同時落在多個路口的半徑內只計算一次，不會重複計入</strong>。半徑可輸入 100／300／500 或任意自訂公尺數（輸入框旁提供 100/300/500 建議值可點選帶入）；直線距離計算方式與本平台報告「圖3-3」易肇事路口科技執法涵蓋率圖表相同，採等距圓柱投影近似公式，短距離下誤差可忽略。科技執法設備座標僅計入本站有經緯度座標者（共1,615處，其中941處為官方公告座標，其餘為地理編碼推估座標，精度不一，詳見「地圖」圖層說明與報告第三章第五節）。「⬇ 匯出清單CSV」會依「目前選單狀態」匯出：<strong>已選單一路口時，只匯出該路口在目前半徑內的科技執法設備明細清單</strong>（與畫面表格內容一致，半徑改變匯出內容就會跟著改變）；<strong>保持「不指定單一點位」時，才會匯出目前篩選範圍內每個路口一列＋該半徑下的涵蓋統計彙總表</strong>（供整批比對用）。</p>
       </div>
 
       <div class="card">
@@ -743,42 +743,42 @@
 
 <!-- 資料檔（由 scripts/build_data.py 產生） -->
 <!-- 版本查詢字串（?v=）用於避免靜態主機／瀏覽器快取到更新前的舊檔，每次更新資料或程式碼請一併更新此版號 -->
-<script src="data/meta.data.js?v=20260918"></script>
-<script src="data/accidents.data.js?v=20260918"></script>
-<script src="data/parties.data.js?v=20260918"></script>
-<script src="data/enforcement.data.js?v=20260918"></script>
-<script src="data/indicators.data.js?v=20260918"></script>
-<script src="data/enforcement_fines.data.js?v=20260918"></script>
-<script src="data/a2_export_manifest.data.js?v=20260918"></script>
-<script src="data/points_hotspot1000.data.js?v=20260918"></script>
-<script src="data/points_safety799.data.js?v=20260918"></script>
-<script src="data/points_tech_enforcement.data.js?v=20260918"></script>
-<script src="data/geo_jump.data.js?v=20260918"></script>
-<script src="data/point_buffer_a1.data.js?v=20260918"></script>
-<script src="data/point_buffer_a2.data.js?v=20260918"></script>
-<script src="data/a2_by_county.data.js?v=20260918"></script>
-<script src="data/a2_by_month.data.js?v=20260918"></script>
-<script src="data/a2_by_hour.data.js?v=20260918"></script>
-<script src="data/a2_acc_type_minor.data.js?v=20260918"></script>
-<script src="data/a2_acc_type_major.data.js?v=20260918"></script>
-<script src="data/a2_cause_minor.data.js?v=20260918"></script>
-<script src="data/a2_age_bracket.data.js?v=20260918"></script>
-<script src="data/a2_crosstab.data.js?v=20260918"></script>
-<script src="data/a2_geo.data.js?v=20260918"></script>
-<script src="data/tenders.data.js?v=20260918"></script>
-<script src="data/audit_opinions_traffic.data.js?v=20260918"></script>
+<script src="data/meta.data.js?v=20260919"></script>
+<script src="data/accidents.data.js?v=20260919"></script>
+<script src="data/parties.data.js?v=20260919"></script>
+<script src="data/enforcement.data.js?v=20260919"></script>
+<script src="data/indicators.data.js?v=20260919"></script>
+<script src="data/enforcement_fines.data.js?v=20260919"></script>
+<script src="data/a2_export_manifest.data.js?v=20260919"></script>
+<script src="data/points_hotspot1000.data.js?v=20260919"></script>
+<script src="data/points_safety799.data.js?v=20260919"></script>
+<script src="data/points_tech_enforcement.data.js?v=20260919"></script>
+<script src="data/geo_jump.data.js?v=20260919"></script>
+<script src="data/point_buffer_a1.data.js?v=20260919"></script>
+<script src="data/point_buffer_a2.data.js?v=20260919"></script>
+<script src="data/a2_by_county.data.js?v=20260919"></script>
+<script src="data/a2_by_month.data.js?v=20260919"></script>
+<script src="data/a2_by_hour.data.js?v=20260919"></script>
+<script src="data/a2_acc_type_minor.data.js?v=20260919"></script>
+<script src="data/a2_acc_type_major.data.js?v=20260919"></script>
+<script src="data/a2_cause_minor.data.js?v=20260919"></script>
+<script src="data/a2_age_bracket.data.js?v=20260919"></script>
+<script src="data/a2_crosstab.data.js?v=20260919"></script>
+<script src="data/a2_geo.data.js?v=20260919"></script>
+<script src="data/tenders.data.js?v=20260919"></script>
+<script src="data/audit_opinions_traffic.data.js?v=20260919"></script>
 
 <!-- 應用程式邏輯 -->
-<script src="js/util.js?v=20260918"></script>
-<script src="js/state.js?v=20260918"></script>
-<script src="js/charts.js?v=20260918"></script>
-<script src="js/map.js?v=20260918"></script>
-<script src="js/hotspot.js?v=20260918"></script>
-<script src="js/improve.js?v=20260918"></script>
-<script src="js/tenders.js?v=20260918"></script>
-<script src="js/audit.js?v=20260918"></script>
-<script src="js/ai_assistant.js?v=20260918"></script>
-<script src="js/export.js?v=20260918"></script>
-<script src="js/app.js?v=20260918"></script>
+<script src="js/util.js?v=20260919"></script>
+<script src="js/state.js?v=20260919"></script>
+<script src="js/charts.js?v=20260919"></script>
+<script src="js/map.js?v=20260919"></script>
+<script src="js/hotspot.js?v=20260919"></script>
+<script src="js/improve.js?v=20260919"></script>
+<script src="js/tenders.js?v=20260919"></script>
+<script src="js/audit.js?v=20260919"></script>
+<script src="js/ai_assistant.js?v=20260919"></script>
+<script src="js/export.js?v=20260919"></script>
+<script src="js/app.js?v=20260919"></script>
 </body>
 </html>

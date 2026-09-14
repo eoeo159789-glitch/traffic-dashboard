@@ -821,8 +821,37 @@
 
     exportBtn.addEventListener('click', () => {
       const dataset = datasetSel.value;
+      const pointId = pointSel.value;
       const radius = Number(radiusInput.value);
       if (!isFinite(radius) || radius <= 0) { alert('請輸入有效的半徑（公尺）'); return; }
+
+      if (pointId) {
+        // 已選單一路口／點位：匯出「該路口半徑內」的科技執法設備明細清單（與畫面上顯示的表格內容一致），
+        // 而不是不管有沒有選點位、半徑設多少，都匯出整份清單的彙總統計（此為先前版本的問題）。
+        const pts = State.pointsByDataset(dataset);
+        const p = pts.find(x => x.id === pointId);
+        if (!p) return;
+        const s = State.techEnfWithinRadius(p, radius);
+        if (s.devices.length === 0) { alert(`「${labelFor(p, dataset)}」半徑 ${radius}m 內查無科技執法設備，沒有可匯出的明細（可放大半徑後再匯出）`); return; }
+        const rows = s.devices.map(d => Object.assign({}, d, { distanceM: Math.round(d.distanceM) }));
+        const cols = [
+          { key: 'distanceM', label: '距離查詢中心點(公尺)' },
+          { key: 'county', label: '縣市' },
+          { key: 'district', label: '行政區' },
+          { key: 'deviceType', label: '科技執法種類' },
+          { key: 'loc', label: '設置地點' },
+          { key: 'items', label: '取締項目' },
+          { key: 'coordSourceLabel', label: '座標來源' },
+          { key: 'lat', label: '緯度' },
+          { key: 'lng', label: '經度' },
+        ];
+        const csv = Util.toCsv(rows, cols);
+        const safeLabel = labelFor(p, dataset).replace(/[\\/:*?"<>|]/g, '_');
+        Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${safeLabel}_半徑${radius}m內科技執法設備明細_${Date.now()}.csv`);
+        return;
+      }
+
+      // 未指定單一點位：維持「每個路口一列＋該半徑下的涵蓋統計」彙總匯出（供整批比對用）
       const pts = currentFilteredPoints();
       if (pts.length === 0) { alert('目前的縣市／鄉鎮／關鍵字篩選條件下沒有符合的點位可以匯出'); return; }
       const rows = pts.map(p => {

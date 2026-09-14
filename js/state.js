@@ -231,7 +231,7 @@ const State = (() => {
 
   // ---- 科技執法涵蓋查詢：以易肇事路口／人行安全點位為中心，找半徑內有幾處科技執法設備 ----
   // 與 pointStatsAtRadius／aggregateBufferStats（算「點位半徑內有多少事故」）方向相反：
-  // 這裡算「點位半徑內有多少科技執法設備」，供「圖3-2」報告表格同等邏輯的網站即時查詢版本。
+  // 這裡算「點位半徑內有多少科技執法設備」，供「圖3-3」報告涵蓋率圖表同等邏輯的網站即時查詢版本。
   // 直線距離計算方式與 build_buffer_compare_xlsx.py／Util.distMeters 一致（等距圓柱投影近似，短距離誤差可忽略）。
   function techEnfWithinRadius(point, radiusM) {
     const devices = techEnforcementPointsWithCoords();
