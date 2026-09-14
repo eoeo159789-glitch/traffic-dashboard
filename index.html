@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>臺灣交通事故資料整合分析模組</title>
-<link rel="stylesheet" href="css/style.css?v=20260915">
+<link rel="stylesheet" href="css/style.css?v=20260916">
 <!-- Leaflet 地圖 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
@@ -81,6 +81,7 @@
       <button class="tab-btn" data-tab="audit">稽核工作站</button>
       <button class="tab-btn" data-tab="tenders">工程經費(標案)</button>
       <button class="tab-btn" data-tab="table">資料表與匯出</button>
+      <button class="tab-btn" data-tab="ai">🤖 AI客服</button>
     </div>
 
     <!-- ============ 總覽 ============ -->
@@ -623,6 +624,76 @@
       </div>
     </section>
 
+    <!-- ============ AI客服 ============ -->
+    <section class="tab-panel" id="tab-ai">
+      <div class="card">
+        <div class="card-head">
+          <h2>🔑 AI 客服設定</h2>
+          <span class="mini-count" id="aiConnStatus">尚未設定</span>
+        </div>
+        <p class="hint">
+          請自行提供 API 金鑰才能使用本功能。金鑰與所有設定僅儲存在<strong>您目前瀏覽器的本機儲存空間（localStorage）</strong>，
+          聊天內容會直接從您的瀏覽器送往您所選擇的 AI 服務商，不會經過本網站的任何伺服器（本站為純靜態網站，沒有後端）。
+          換電腦、換瀏覽器或清除瀏覽器資料後需要重新輸入。
+        </p>
+        <div class="nav-row">
+          <span class="nav-label">服務商：</span>
+          <select id="aiProviderSelect">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI 相容格式（可用於 OpenAI／DeepSeek／Groq／自架服務等）</option>
+          </select>
+        </div>
+        <div class="nav-row">
+          <span class="nav-label">API 金鑰：</span>
+          <input type="password" id="aiApiKey" class="search-input" style="min-width:280px" placeholder="貼上您的 API 金鑰" autocomplete="off">
+          <button class="btn" id="aiToggleKeyBtn" type="button">👁 顯示</button>
+        </div>
+        <div class="nav-row" id="aiGeminiRow">
+          <span class="nav-label">模型：</span>
+          <select id="aiGeminiModel">
+            <option value="gemini-2.5-flash">gemini-2.5-flash（推薦，速度快）</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro（回答品質較高，較慢）</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+            <option value="__custom__">自訂型號名稱…</option>
+          </select>
+          <input type="text" id="aiGeminiModelCustom" class="search-input" placeholder="輸入完整模型名稱" hidden>
+        </div>
+        <div class="nav-row" id="aiOpenAIRow" hidden>
+          <span class="nav-label">API 網址：</span>
+          <input type="text" id="aiOpenAIBaseUrl" class="search-input" style="min-width:280px" placeholder="例如 https://api.openai.com/v1">
+        </div>
+        <div class="nav-row" id="aiOpenAIRow2" hidden>
+          <span class="nav-label">模型名稱：</span>
+          <input type="text" id="aiOpenAIModel" class="search-input" placeholder="例如 gpt-4o-mini">
+        </div>
+        <div class="nav-row">
+          <button class="btn primary" id="aiSaveSettingsBtn" type="button">💾 儲存設定</button>
+          <button class="btn" id="aiTestBtn" type="button">🔌 測試連線</button>
+          <button class="btn" id="aiClearSettingsBtn" type="button">🗑 清除已儲存金鑰與設定</button>
+        </div>
+        <p class="hint" id="aiTestResult"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>💬 與 AI 客服對話</h2>
+          <div class="card-tools">
+            <button class="btn" id="aiClearChatBtn" type="button">🗑 清空對話</button>
+          </div>
+        </div>
+        <p class="hint">
+          AI 客服已預先讀取本平台之分頁功能、資料來源與統計方法說明，可協助您了解「怎麼用地圖」「熱點環域分析怎麼算」
+          「資料涵蓋範圍與限制」等問題；惟其回答仍可能有誤，正式分析結論請以平台實際數據與頁面上的方法論說明為準。
+        </p>
+        <div class="chip-list" id="aiQuickChips"></div>
+        <div id="aiChatLog" class="ai-chat-log"></div>
+        <div class="nav-row" id="aiChatInputRow">
+          <textarea id="aiChatInput" class="ai-chat-input" rows="2" placeholder="輸入問題，按 Enter 送出（Shift+Enter 換行）"></textarea>
+          <button class="btn primary" id="aiSendBtn" type="button">送出 ➤</button>
+        </div>
+      </div>
+    </section>
+
     <p class="footer-note">
       資料來源：內政部警政署 A1 交通事故資料、警政署舉發統計、內政部縣市重要統計指標。
       本平台為離線靜態網站，資料處理流程見 <code>scripts/build_data.py</code>，可自行更新後重新產生。
@@ -640,41 +711,42 @@
 
 <!-- 資料檔（由 scripts/build_data.py 產生） -->
 <!-- 版本查詢字串（?v=）用於避免靜態主機／瀏覽器快取到更新前的舊檔，每次更新資料或程式碼請一併更新此版號 -->
-<script src="data/meta.data.js?v=20260915"></script>
-<script src="data/accidents.data.js?v=20260915"></script>
-<script src="data/parties.data.js?v=20260915"></script>
-<script src="data/enforcement.data.js?v=20260915"></script>
-<script src="data/indicators.data.js?v=20260915"></script>
-<script src="data/enforcement_fines.data.js?v=20260915"></script>
-<script src="data/a2_export_manifest.data.js?v=20260915"></script>
-<script src="data/points_hotspot1000.data.js?v=20260915"></script>
-<script src="data/points_safety799.data.js?v=20260915"></script>
-<script src="data/points_tech_enforcement.data.js?v=20260915"></script>
-<script src="data/geo_jump.data.js?v=20260915"></script>
-<script src="data/point_buffer_a1.data.js?v=20260915"></script>
-<script src="data/point_buffer_a2.data.js?v=20260915"></script>
-<script src="data/a2_by_county.data.js?v=20260915"></script>
-<script src="data/a2_by_month.data.js?v=20260915"></script>
-<script src="data/a2_by_hour.data.js?v=20260915"></script>
-<script src="data/a2_acc_type_minor.data.js?v=20260915"></script>
-<script src="data/a2_acc_type_major.data.js?v=20260915"></script>
-<script src="data/a2_cause_minor.data.js?v=20260915"></script>
-<script src="data/a2_age_bracket.data.js?v=20260915"></script>
-<script src="data/a2_crosstab.data.js?v=20260915"></script>
-<script src="data/a2_geo.data.js?v=20260915"></script>
-<script src="data/tenders.data.js?v=20260915"></script>
-<script src="data/audit_opinions_traffic.data.js?v=20260915"></script>
+<script src="data/meta.data.js?v=20260916"></script>
+<script src="data/accidents.data.js?v=20260916"></script>
+<script src="data/parties.data.js?v=20260916"></script>
+<script src="data/enforcement.data.js?v=20260916"></script>
+<script src="data/indicators.data.js?v=20260916"></script>
+<script src="data/enforcement_fines.data.js?v=20260916"></script>
+<script src="data/a2_export_manifest.data.js?v=20260916"></script>
+<script src="data/points_hotspot1000.data.js?v=20260916"></script>
+<script src="data/points_safety799.data.js?v=20260916"></script>
+<script src="data/points_tech_enforcement.data.js?v=20260916"></script>
+<script src="data/geo_jump.data.js?v=20260916"></script>
+<script src="data/point_buffer_a1.data.js?v=20260916"></script>
+<script src="data/point_buffer_a2.data.js?v=20260916"></script>
+<script src="data/a2_by_county.data.js?v=20260916"></script>
+<script src="data/a2_by_month.data.js?v=20260916"></script>
+<script src="data/a2_by_hour.data.js?v=20260916"></script>
+<script src="data/a2_acc_type_minor.data.js?v=20260916"></script>
+<script src="data/a2_acc_type_major.data.js?v=20260916"></script>
+<script src="data/a2_cause_minor.data.js?v=20260916"></script>
+<script src="data/a2_age_bracket.data.js?v=20260916"></script>
+<script src="data/a2_crosstab.data.js?v=20260916"></script>
+<script src="data/a2_geo.data.js?v=20260916"></script>
+<script src="data/tenders.data.js?v=20260916"></script>
+<script src="data/audit_opinions_traffic.data.js?v=20260916"></script>
 
 <!-- 應用程式邏輯 -->
-<script src="js/util.js?v=20260915"></script>
-<script src="js/state.js?v=20260915"></script>
-<script src="js/charts.js?v=20260915"></script>
-<script src="js/map.js?v=20260915"></script>
-<script src="js/hotspot.js?v=20260915"></script>
-<script src="js/improve.js?v=20260915"></script>
-<script src="js/tenders.js?v=20260915"></script>
-<script src="js/audit.js?v=20260915"></script>
-<script src="js/export.js?v=20260915"></script>
-<script src="js/app.js?v=20260915"></script>
+<script src="js/util.js?v=20260916"></script>
+<script src="js/state.js?v=20260916"></script>
+<script src="js/charts.js?v=20260916"></script>
+<script src="js/map.js?v=20260916"></script>
+<script src="js/hotspot.js?v=20260916"></script>
+<script src="js/improve.js?v=20260916"></script>
+<script src="js/tenders.js?v=20260916"></script>
+<script src="js/audit.js?v=20260916"></script>
+<script src="js/ai_assistant.js?v=20260916"></script>
+<script src="js/export.js?v=20260916"></script>
+<script src="js/app.js?v=20260916"></script>
 </body>
 </html>

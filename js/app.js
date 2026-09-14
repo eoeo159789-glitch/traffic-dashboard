@@ -258,6 +258,7 @@
       case 'audit': Audit.render(); break;
       case 'tenders': Tenders.render(); break;
       case 'table': renderTableTab(accidents); break;
+      case 'ai': AIAssistant.render(); break;
     }
   }
 
@@ -702,6 +703,7 @@
     Improve.init();
     Audit.init();
     Tenders.init();
+    AIAssistant.init();
 
     State.onChange(() => { tablePage = 1; renderCurrentTab(); });
     renderCurrentTab();
