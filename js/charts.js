@@ -803,6 +803,109 @@ const Charts = (() => {
     });
   }
 
+  // ---------------- 各縣市易肇事路口科技執法設備覆蓋率（對應報告圖3-3） ----------------
+  // rows = [{county, covered, total, pct}]（呼叫端已依 pct 由高到低排序），avgPct = 各縣市涵蓋率之簡單平均（虛線位置）。
+  // 三段配色（與報告圖表一致的綠／藍／紅）：pct >= avgPct*1.5 為高（好），pct >= avgPct 為中，其餘為低。
+  function renderTechCoverageRank(canvasId, rows, avgPct) {
+    const NO_DATA_COLOR = '#9a988f'; // 中性灰：此縣市在查詢對象清單中沒有路口資料，無法計算涵蓋率
+    const colorFor = (r) => {
+      if (r.pct == null) return NO_DATA_COLOR;
+      if (r.pct >= avgPct * 1.5 && avgPct > 0) return Util.STATUS.good;
+      if (r.pct >= avgPct) return Util.PALETTE[0];
+      return Util.STATUS.critical;
+    };
+    // 座標可信度為「僅系統推估座標」的縣市，在縣市名稱後方加註「*」提示涵蓋率僅供參考（見下方圖說）
+    const labelFor = (r) => r.county + (r.confidence === 'low' ? ' ＊' : '');
+    const avgLinePlugin = {
+      id: 'techCoverageAvgLine',
+      afterDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea) return;
+        const xPix = scales.x.getPixelForValue(avgPct);
+        ctx.save();
+        ctx.strokeStyle = Util.STATUS.critical;
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xPix, chartArea.top);
+        ctx.lineTo(xPix, chartArea.bottom);
+        ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.fillStyle = Util.STATUS.critical;
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`平均 ${avgPct.toFixed(1)}%`, Math.min(xPix + 4, chartArea.right - 70), chartArea.top + 12);
+        ctx.restore();
+      },
+    };
+    const barLabelsPlugin = {
+      id: 'techCoverageBarLabels',
+      afterDatasetsDraw(chart) {
+        const meta = chart.getDatasetMeta(0);
+        if (!meta || !meta.data) return;
+        const { ctx, chartArea, scales } = chart;
+        ctx.save();
+        ctx.font = '11px sans-serif';
+        ctx.fillStyle = Util.chartTextColor();
+        ctx.textBaseline = 'middle';
+        meta.data.forEach((el, i) => {
+          const r = rows[i];
+          if (!r) return;
+          const text = r.pct == null ? '無路口資料' : `${r.pct.toFixed(1)}%  (${r.covered}/${r.total})`;
+          const textW = ctx.measureText(text).width;
+          const fitsInside = el.x - scales.x.getPixelForValue(0) > textW + 16;
+          if (fitsInside) {
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(text, el.x - 6, el.y);
+          } else {
+            ctx.textAlign = 'left';
+            ctx.fillStyle = Util.chartTextColor();
+            ctx.fillText(text, Math.min(el.x + 6, chartArea.right - textW - 2), el.y);
+          }
+        });
+        ctx.restore();
+      },
+    };
+
+    upsert(canvasId, {
+      type: 'bar',
+      data: {
+        labels: rows.map(labelFor),
+        datasets: [{
+          label: '科技執法設備覆蓋率',
+          data: rows.map(r => r.pct == null ? 0 : Number(r.pct.toFixed(1))),
+          backgroundColor: rows.map(colorFor),
+          borderRadius: 4,
+        }],
+      },
+      options: baseOptions({
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const r = rows[ctx.dataIndex];
+                if (r.pct == null) return `${r.county}：此查詢對象清單中沒有路口資料，無法計算涵蓋率`;
+                const confNote = r.confidence === 'low' ? '（＊本縣市科技執法設備座標目前全數為系統推估座標，非官方公告座標，涵蓋率僅供參考）' : '';
+                return `${r.county}：${r.pct.toFixed(1)}%（${r.covered}/${r.total} 處路口半徑內有科技執法設備）${confNote}`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: { min: 0, max: 100, ticks: { color: Util.chartTextColor(), callback: v => v + '%' }, grid: { color: Util.chartGridColor() }, title: { display: true, text: '易肇事路口半徑內設有科技執法設備之比例（%）', color: Util.chartTextColor() } },
+          y: { ticks: { color: Util.chartTextColor(), font: { size: 11 } }, grid: { display: false } },
+        },
+      }),
+      plugins: [avgLinePlugin, barLabelsPlugin],
+    });
+  }
+
   return {
     upsert, exportPng, refreshTheme,
     renderImproveRank, renderImproveScatter, renderRatioRank,
@@ -811,5 +914,6 @@ const Charts = (() => {
     renderEnfScatter, renderEnfTrend, renderEnfBar, renderEnfFines,
     renderPopRate, renderDensityScatter, renderLongTrend,
     renderA2Trend, renderA2CountyRank, renderCrossTableAgg, renderSingleDimAgg, renderCauseChartAgg,
+    renderTechCoverageRank,
   };
 })();

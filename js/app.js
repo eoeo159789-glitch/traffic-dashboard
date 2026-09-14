@@ -137,6 +137,9 @@
   function renderMapTab(accidents) {
     MapView.render(accidents);
     MapView.invalidateSize();
+    // 覆蓋率長條圖在分頁尚未切換過來前 canvas 是 display:none（寬高為0），Chart.js 此時建立會畫不出東西，
+    // 所以改成「第一次切到地圖分頁時」才產生一次，之後就交由使用者按「產生圖表」按鈕手動更新。
+    if (!tcRankLast && typeof tcRankGenerate === 'function') tcRankGenerate();
   }
 
   let exploreSource = 'a1';
@@ -657,6 +660,7 @@
         ];
     return base.concat([
       { key: 'techCount', label: '半徑內科技執法點位數', numeric: true },
+      { key: 'covered', label: '是否涵蓋(≥1處)', value: r => r.techCount > 0 ? '是' : '否' },
       { key: 'nearestM', label: '最近一處科技執法設備距離(公尺)', numeric: true, value: r => r.nearestM == null ? '' : Math.round(r.nearestM) },
       { key: 'lat', label: '緯度' },
       { key: 'lng', label: '經度' },
@@ -672,6 +676,7 @@
     const radiusInput = document.getElementById('tcRadiusInput');
     const queryBtn = document.getElementById('tcQueryBtn');
     const exportBtn = document.getElementById('tcExportBtn');
+    const exportCoveredOnlyChk = document.getElementById('tcExportCoveredOnly');
     const resultRow = document.getElementById('tcResultRow');
     const resultText = document.getElementById('tcResultText');
     const clearBtn = document.getElementById('tcClearBtn');
@@ -800,10 +805,15 @@
         const pts = currentFilteredPoints();
         if (pts.length === 0) { alert('目前的縣市／鄉鎮／關鍵字篩選條件下沒有符合的點位'); return; }
         const agg = State.aggregateTechEnfCoverage(pts, radius);
+        const cov = State.techEnfCoveredCount(pts, radius);
         MapView.setAggregateWithDeviceMarkers(pts, radius, agg.devices, MAP_DRAW_CAP);
         const scopeLabel = [countySel.value, townshipSel.value].filter(Boolean).join('') || '全部';
         const capNote = pts.length > MAP_DRAW_CAP ? `（地圖僅顯示前 ${MAP_DRAW_CAP} 個點位的範圍圈，統計已包含全部 ${pts.length} 個點位）` : '';
-        resultText.textContent = `${scopeLabel}（共 ${pts.length} 個點位，設備已去重不重複計算）合計｜半徑 ${radius}m 內共涵蓋 ${Util.fmtNum(agg.count)} 處科技執法設備${capNote}`;
+        const covPct = cov.total ? (cov.covered / cov.total * 100).toFixed(1) : '0.0';
+        // 兩個數字並列顯示，避免與下方「各縣市涵蓋率」圖表（算「涵蓋路口數」）的數字混淆：
+        // agg.count 是「半徑內不重複計算的科技執法設備數」；cov.covered 是「半徑內至少有1處設備的路口數」，
+        // 兩者是不同統計量，本來就可能不同（因為多個路口可能共用同一處鄰近設備），並非其中一個算錯。
+        resultText.innerHTML = `${scopeLabel}（共 ${pts.length} 個點位）合計｜半徑 ${radius}m 內：不重複計算共涵蓋 <strong>${Util.fmtNum(agg.count)}</strong> 處科技執法設備（同一設備同時落在多個路口半徑內只算一次）；其中有 <strong>${Util.fmtNum(cov.covered)} / ${Util.fmtNum(cov.total)}</strong> 個路口（<strong>${covPct}%</strong>）半徑內至少涵蓋 1 處科技執法設備${capNote}`;
         renderDeviceTable(agg.devices);
       }
       resultRow.hidden = false;
@@ -851,18 +861,80 @@
         return;
       }
 
-      // 未指定單一點位：維持「每個路口一列＋該半徑下的涵蓋統計」彙總匯出（供整批比對用）
+      // 未指定單一點位：維持「每個路口一列＋該半徑下的涵蓋統計」彙總匯出（供整批比對用）。
+      // 每列都會標示「是否涵蓋」欄位；若勾選「只匯出有涵蓋的路口」，則進一步篩選成只留下有涵蓋的列，
+      // 不必再自行到 Excel 裡手動篩選。
       const pts = currentFilteredPoints();
       if (pts.length === 0) { alert('目前的縣市／鄉鎮／關鍵字篩選條件下沒有符合的點位可以匯出'); return; }
-      const rows = pts.map(p => {
+      let rows = pts.map(p => {
         const s = State.techEnfWithinRadius(p, radius);
         return Object.assign({}, p, { techCount: s.count, nearestM: s.nearestM });
       });
+      const coveredOnly = !!(exportCoveredOnlyChk && exportCoveredOnlyChk.checked);
+      if (coveredOnly) {
+        rows = rows.filter(r => r.techCount > 0);
+        if (rows.length === 0) { alert(`勾選了「只匯出有涵蓋的路口」，但半徑 ${radius}m 內，目前篩選範圍中沒有任何路口涵蓋科技執法設備，沒有可匯出的資料`); return; }
+      }
       const cols = tcColumnsFor(dataset);
       const csv = Util.toCsv(rows, cols);
       const label = dataset === 'safety799' ? '人行安全補助799處' : '易肇事路口1000處';
       const scope = [countySel.value, townshipSel.value].filter(Boolean).join('') || '全部';
-      Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${label}_${scope}_半徑${radius}m科技執法涵蓋統計_${Date.now()}.csv`);
+      const coveredSuffix = coveredOnly ? `_僅有涵蓋共${rows.length}處` : '';
+      Util.downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${label}_${scope}_半徑${radius}m科技執法涵蓋統計${coveredSuffix}_${Date.now()}.csv`);
+    });
+  }
+
+  // ---------------- 各縣市易肇事路口科技執法設備覆蓋率（對應報告圖3-3） ----------------
+
+  let tcRankLast = null; // 記住最後一次產生圖表的資料，供 CSV 匯出使用
+  let tcRankGenerate = null; // 供 renderMapTab() 在第一次切到地圖分頁時呼叫（此時 canvas 才是可見狀態）
+
+  function setupTechCoverageRank() {
+    const datasetSel = document.getElementById('tcRankDatasetSelect');
+    const radiusInput = document.getElementById('tcRankRadiusInput');
+    const genBtn = document.getElementById('tcRankGenBtn');
+    const exportCsvBtn = document.getElementById('tcRankExportCsv');
+    const note = document.getElementById('tcRankNote');
+
+    function generate() {
+      const dataset = datasetSel.value;
+      const radius = Number(radiusInput.value);
+      if (!isFinite(radius) || radius <= 0) { alert('請輸入有效的半徑（公尺）'); return; }
+      const { rows, avgPct } = State.techCoverageByCounty(dataset, radius);
+      if (rows.length === 0) { alert('目前查詢對象沒有可用的縣市資料'); return; }
+      tcRankLast = { dataset, radius, rows, avgPct };
+      Charts.renderTechCoverageRank('tcRankChart', rows, avgPct);
+      const label = dataset === 'safety799' ? '799人行安全補助點位' : '1000易肇事路口';
+      const withData = rows.filter(r => r.total > 0);
+      const noDataCounties = rows.filter(r => r.total === 0).map(r => r.county);
+      const lowConfCounties = rows.filter(r => r.total > 0 && r.confidence === 'low').map(r => r.county);
+      let noteText = `${label}｜半徑 ${radius}m｜共 ${withData.length} 個縣市有涵蓋率可計算，平均涵蓋率 ${avgPct.toFixed(1)}%（縣市數簡單平均）。`;
+      if (noDataCounties.length) noteText += `　「${noDataCounties.join('、')}」於此查詢對象清單中沒有路口資料，圖中標示為無資料，未納入平均值計算。`;
+      if (lowConfCounties.length) noteText += `　標「*」之縣市（${lowConfCounties.join('、')}）科技執法設備座標目前全數為系統推估座標（非官方公告座標），涵蓋率僅供參考。`;
+      note.textContent = noteText;
+    }
+
+    genBtn.addEventListener('click', generate);
+    tcRankGenerate = generate; // 半徑預設 300m，與報告圖3-3一致；實際產生時機見 renderMapTab()
+
+    exportCsvBtn.addEventListener('click', () => {
+      if (!tcRankLast) { alert('請先按「📊 產生圖表」'); return; }
+      const { dataset, radius, rows, avgPct } = tcRankLast;
+      const CONFIDENCE_LABEL = {
+        full: '含官方公告座標',
+        low: '僅系統推估座標（非官方公告座標），涵蓋率僅供參考',
+        none: '查無該縣市任何有座標之科技執法設備資料',
+      };
+      const cols = [
+        { key: 'county', label: '縣市' },
+        { key: 'covered', label: '涵蓋路口數（半徑內至少1處科技執法設備）', numeric: true },
+        { key: 'total', label: '路口總數', numeric: true },
+        { key: 'pctText', label: '涵蓋率(%)', value: r => r.pct == null ? '無資料' : r.pct.toFixed(1) },
+        { key: 'confidenceLabel', label: '科技執法設備座標可信度備註', value: r => CONFIDENCE_LABEL[r.confidence] || '' },
+      ];
+      const csv = Util.toCsv(rows, cols);
+      const label = dataset === 'safety799' ? '799人行安全補助點位' : '1000易肇事路口';
+      Util.downloadBlob(new Blob([`﻿各縣市平均涵蓋率,${avgPct.toFixed(1)}%\r\n` + csv.replace(/^﻿/, '')], { type: 'text/csv;charset=utf-8' }), `${label}_各縣市科技執法涵蓋率_半徑${radius}m_${Date.now()}.csv`);
     });
   }
 
@@ -929,6 +1001,7 @@
     setupMapNav();
     setupHotspotQuery();
     setupTechCoverageQuery();
+    setupTechCoverageRank();
     renderA2DownloadList();
     MapView.init();
     Hotspot.init();

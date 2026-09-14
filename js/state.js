@@ -248,6 +248,8 @@ const State = (() => {
 
   // 多點合計（去重）：同一處科技執法設備若同時落在多個查詢點位的半徑內，只計算一次，
   // 避免點位彼此靠近時，同一處設備被重複計入、導致涵蓋數字失真膨脹（邏輯同 aggregateBufferStats）。
+  // 注意：這是「不重複計算的設備數」，與 techEnfCoveredCount／techCoverageByCounty 算的
+  // 「有多少路口至少被涵蓋 1 次」是不同統計量，兩者本來就可能不同（見下方函式說明），不可互相取代。
   function aggregateTechEnfCoverage(points, radiusM) {
     const devices = techEnforcementPointsWithCoords();
     const matched = [];
@@ -261,6 +263,79 @@ const State = (() => {
     return { count: matched.length, devices: matched };
   }
 
+  // 多點「涵蓋路口數」統計：算這批點位中，有幾個點位半徑內「至少有 1 處」科技執法設備
+  // （只算「有／沒有」，不管半徑內實際有幾處），邏輯與 techCoverageByCounty 對每個縣市做的事相同，
+  // 差別是這裡不分縣市、直接對傳入的點位清單算總數。
+  // 這個數字（covered）與 aggregateTechEnfCoverage 回傳的 count（不重複計算的設備數）是兩種不同統計量：
+  // 同一處設備可能同時落在多個路口的半徑內，所以「涵蓋路口數」可以比「不重複設備數」多，也可以比較少，
+  // 兩者本來就會不一樣，不是計算錯誤。查詢頁面會把兩個數字並列顯示，避免使用者誤以為兩者應該相等。
+  function techEnfCoveredCount(points, radiusM) {
+    const devices = techEnforcementPointsWithCoords();
+    let covered = 0;
+    points.forEach(p => {
+      for (let i = 0; i < devices.length; i++) {
+        if (Util.distMeters(p.lat, p.lng, devices[i].lat, devices[i].lng) <= radiusM) { covered++; break; }
+      }
+    });
+    return { covered, total: points.length };
+  }
+
+  // 各縣市科技執法設備座標可信度：官方公告座標(official) vs. 地理編碼推估座標(estimated_high/estimated_low)。
+  // 供 techCoverageByCounty 標示「本縣市座標多為推估、涵蓋率僅供參考」的縣市，以及完全沒有座標資料的縣市。
+  function techDeviceConfidenceByCounty() {
+    const devices = techEnforcementPointsWithCoords();
+    const byCounty = {};
+    devices.forEach(d => {
+      const c = d.county || '(未知)';
+      if (!byCounty[c]) byCounty[c] = { withCoords: 0, official: 0 };
+      byCounty[c].withCoords++;
+      if (d.coordSource === 'official') byCounty[c].official++;
+    });
+    return byCounty;
+  }
+
+  // 各縣市易肇事路口（或人行安全補助點位）科技執法設備覆蓋率：對應報告「圖3-3」的計算邏輯，
+  // 但改用平台目前（較完整）的科技執法設備座標資料，半徑亦可自訂而非固定 300 公尺。
+  // 「涵蓋」定義＝該點位半徑內至少有 1 處科技執法設備（不論幾處，只算「有／沒有」），
+  // 與 techEnfWithinRadius／aggregateTechEnfCoverage（算「半徑內有幾處設備」）是不同的統計量，
+  // 不可直接互相比較。pct 為每個縣市自己的涵蓋率（涵蓋路口數 ÷ 該縣市路口總數 × 100）；
+  // avgPct 為「各縣市涵蓋率」的簡單平均（縣市數平均，非以路口數加權，且只計入有路口資料的縣市），
+  // 對應報告圖表上的虛線平均值。
+  // 固定回傳全臺 22 縣市（含目前清單中沒有任何路口的縣市，如金門縣／連江縣）：
+  //   total === 0 的縣市代表「此查詢對象清單中該縣市沒有路口資料」，pct 為 null（無法計算，並非 0%）；
+  //   confidence 標示該縣市科技執法設備座標可信度：'none' = 全臺資料庫中查無該縣市任何有座標的設備、
+  //   'low' = 該縣市設備座標全數為系統推估（非官方公告座標）、'full' = 至少部分為官方公告座標。
+  function techCoverageByCounty(dataset, radiusM) {
+    const devices = techEnforcementPointsWithCoords();
+    const pts = pointsByDataset(dataset === 'safety799' ? 'safety799' : 'hotspot1000');
+    const deviceConf = techDeviceConfidenceByCounty();
+    const byCounty = {};
+    META.counties.forEach(c => { byCounty[c] = { county: c, total: 0, covered: 0 }; });
+    pts.forEach(p => {
+      if (!byCounty[p.county]) byCounty[p.county] = { county: p.county, total: 0, covered: 0 }; // 理論上不會發生，保留以防資料異常（點位縣市不在 META.counties 清單內）
+      const b = byCounty[p.county];
+      b.total++;
+      for (let i = 0; i < devices.length; i++) {
+        if (Util.distMeters(p.lat, p.lng, devices[i].lat, devices[i].lng) <= radiusM) { b.covered++; break; }
+      }
+    });
+    const rows = Object.values(byCounty).map(r => {
+      const conf = deviceConf[r.county] || { withCoords: 0, official: 0 };
+      let confidence = 'full';
+      if (conf.withCoords === 0) confidence = 'none';
+      else if (conf.official === 0) confidence = 'low';
+      return Object.assign({}, r, {
+        pct: r.total ? r.covered / r.total * 100 : null,
+        confidence,
+        deviceWithCoords: conf.withCoords,
+      });
+    });
+    const withData = rows.filter(r => r.total > 0).sort((a, b) => b.pct - a.pct || b.total - a.total);
+    const noData = rows.filter(r => r.total === 0).sort((a, b) => a.county.localeCompare(b.county, 'zh-Hant'));
+    const avgPct = withData.length ? withData.reduce((s, r) => s + r.pct, 0) / withData.length : 0;
+    return { rows: withData.concat(noData), avgPct };
+  }
+
   return {
     DIMENSIONS, filters, uniqueValues, matches, filtered, invalidate,
     toggleInSet, setAll, resetAll, onChange, partiesFor,
@@ -269,6 +344,7 @@ const State = (() => {
     hotspotPoints, safety799Points, techEnforcementPoints, techEnforcementPointsWithCoords,
     pointsByDataset, bufferA1For, bufferA2For, geoJump, customBufferStats,
     pointStatsAtRadius, aggregateBufferStats,
-    techEnfWithinRadius, aggregateTechEnfCoverage,
+    techEnfWithinRadius, aggregateTechEnfCoverage, techEnfCoveredCount,
+    techDeviceConfidenceByCounty, techCoverageByCounty,
   };
 })();

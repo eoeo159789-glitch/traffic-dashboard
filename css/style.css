@@ -197,6 +197,7 @@ a { color: var(--series-1); }
   .kpi-card .value { font-size: 20px; }
   #map { height: 380px; }
   .chart-wrap.tall { height: 300px; }
+  .chart-wrap.xtall { height: 460px; }
   .chart-wrap { height: 240px; }
   .card-head { flex-direction: column; align-items: flex-start; }
   .card-head .card-tools { flex-wrap: wrap; }
@@ -438,6 +439,7 @@ a { color: var(--series-1); }
 .download-list .meta { color: var(--text-muted); font-size: 11px; }
 .chart-wrap { position: relative; height: 280px; }
 .chart-wrap.tall { height: 380px; }
+.chart-wrap.xtall { height: 620px; }
 .chart-wrap.short { height: 200px; }
 
 select, .select, input[type="number"], input[type="text"] {
