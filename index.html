@@ -735,7 +735,10 @@
         </div>
         <p class="hint">
           AI 客服已預先讀取本平台之分頁功能、資料來源與統計方法說明，可協助您了解「怎麼用地圖」「熱點環域分析怎麼算」
-          「資料涵蓋範圍與限制」等問題；惟其回答仍可能有誤，正式分析結論請以平台實際數據與頁面上的方法論說明為準。
+          「資料涵蓋範圍與限制」等問題；當您問到具體某年度／縣市／機關的審計意見內容時，系統會自動從審計部110-114年度
+          決算審核報告資料（含「審計意見統計」頁與「科技執法設備選址／易肇事路口改善」專題彙整52則）檢索最相關的原文片段
+          夾帶給AI參考回答。惟其回答仍可能有誤，正式分析結論請以平台實際數據與頁面上的方法論說明為準，審計意見完整原文
+          請以 budget.html「審計意見統計」頁為準。
         </p>
         <div class="chip-list" id="aiQuickChips"></div>
         <div id="aiChatLog" class="ai-chat-log"></div>
@@ -787,6 +790,7 @@
 <script src="data/a2_geo.data.js?v=20260921"></script>
 <script src="data/tenders.data.js?v=20260921"></script>
 <script src="data/audit_opinions_traffic.data.js?v=20260921"></script>
+<script src="data/audit_opinions_tech_enforcement.data.js?v=20260921"></script>
 
 <!-- 應用程式邏輯 -->
 <script src="js/util.js?v=20260921"></script>
@@ -797,7 +801,7 @@
 <script src="js/improve.js?v=20260921"></script>
 <script src="js/tenders.js?v=20260921"></script>
 <script src="js/audit.js?v=20260921"></script>
-<script src="js/ai_assistant.js?v=20260921"></script>
+<script src="js/ai_assistant.js?v=20260922"></script>
 <script src="js/export.js?v=20260921"></script>
 <script src="js/app.js?v=20260921"></script>
 </body>
