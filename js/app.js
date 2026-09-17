@@ -892,6 +892,7 @@
   function setupTechCoverageRank() {
     const datasetSel = document.getElementById('tcRankDatasetSelect');
     const radiusInput = document.getElementById('tcRankRadiusInput');
+    const showLowConfChk = document.getElementById('tcRankShowLowConfChk');
     const genBtn = document.getElementById('tcRankGenBtn');
     const exportCsvBtn = document.getElementById('tcRankExportCsv');
     const note = document.getElementById('tcRankNote');
@@ -900,21 +901,36 @@
       const dataset = datasetSel.value;
       const radius = Number(radiusInput.value);
       if (!isFinite(radius) || radius <= 0) { alert('請輸入有效的半徑（公尺）'); return; }
-      const { rows, avgPct } = State.techCoverageByCounty(dataset, radius);
-      if (rows.length === 0) { alert('目前查詢對象沒有可用的縣市資料'); return; }
+      const { rows: allRows, avgPct: avgPctAll } = State.techCoverageByCounty(dataset, radius);
+      if (allRows.length === 0) { alert('目前查詢對象沒有可用的縣市資料'); return; }
+      const showLowConf = !!(showLowConfChk && showLowConfChk.checked);
+      // 預設（不勾選）隱藏「座標全數為系統推估、非官方公告座標」的縣市（即標「＊」者），
+      // 避免這些僅供參考的縣市與其他縣市並列比較時造成誤解；勾選後才會顯示。
+      // 「無路口資料」（confidence==='none' 或 total===0）的灰色縣市不受此開關影響，一律照常顯示。
+      const rows = showLowConf ? allRows : allRows.filter(r => r.confidence !== 'low');
+      const withData = rows.filter(r => r.total > 0);
+      // 平均線需要跟著目前實際顯示的縣市重新計算，否則勾選/取消勾選後，虛線位置會跟畫面上看得到的
+      // 長條對不起來（例如隱藏掉的＊縣市涵蓋率偏低時，把它們排除後平均應該要跟著往上調）。
+      const avgPct = withData.length ? withData.reduce((s, r) => s + r.pct, 0) / withData.length : 0;
       tcRankLast = { dataset, radius, rows, avgPct };
       Charts.renderTechCoverageRank('tcRankChart', rows, avgPct);
       const label = dataset === 'safety799' ? '799人行安全補助點位' : '1000易肇事路口';
-      const withData = rows.filter(r => r.total > 0);
       const noDataCounties = rows.filter(r => r.total === 0).map(r => r.county);
-      const lowConfCounties = rows.filter(r => r.total > 0 && r.confidence === 'low').map(r => r.county);
+      const lowConfCounties = allRows.filter(r => r.total > 0 && r.confidence === 'low').map(r => r.county);
       let noteText = `${label}｜半徑 ${radius}m｜共 ${withData.length} 個縣市有涵蓋率可計算，平均涵蓋率 ${avgPct.toFixed(1)}%（縣市數簡單平均）。`;
       if (noDataCounties.length) noteText += `　「${noDataCounties.join('、')}」於此查詢對象清單中沒有路口資料，圖中標示為無資料，未納入平均值計算。`;
-      if (lowConfCounties.length) noteText += `　標「*」之縣市（${lowConfCounties.join('、')}）科技執法設備座標目前全數為系統推估座標（非官方公告座標），涵蓋率僅供參考。`;
+      if (lowConfCounties.length) {
+        if (showLowConf) {
+          noteText += `　標「*」之縣市（${lowConfCounties.join('、')}）科技執法設備座標目前全數為系統推估座標（非官方公告座標），涵蓋率僅供參考。`;
+        } else {
+          noteText += `　另有「${lowConfCounties.join('、')}」共${lowConfCounties.length}個縣市，科技執法設備座標目前全數為系統推估座標（非官方公告座標），已預設不顯示、平均值亦未納入計算；如需查看可勾選上方「顯示僅有推估座標的縣市（標＊）」。`;
+        }
+      }
       note.textContent = noteText;
     }
 
     genBtn.addEventListener('click', generate);
+    if (showLowConfChk) showLowConfChk.addEventListener('change', generate);
     tcRankGenerate = generate; // 半徑預設 300m，與報告圖3-3一致；實際產生時機見 renderMapTab()
 
     exportCsvBtn.addEventListener('click', () => {

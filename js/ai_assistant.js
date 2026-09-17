@@ -28,7 +28,129 @@ const AIAssistant = (() => {
     '1000 易肇事路口跟 799 人行安全補助地點是什麼資料？',
     '標案經費的統計方式與限制是什麼？',
     '稽核工作站的跨資料集異常偵測是怎麼判斷嚴重度的？',
+    '審計意見裡有提到科技執法設備選址跟事故熱點對不上的問題嗎？',
   ];
+
+  // ============================================================
+  // 審計意見檢索（輕量、純前端 TF-IDF 風格關鍵字比對）
+  // ------------------------------------------------------------
+  // 目的：AI 客服原本只知道「審計意見統計」頁面『存在、怎麼算、有什麼限制』，
+  // 並沒有實際審計意見全文可以引用。這裡在每次送出問題前，先用簡單的中文
+  // 雙字元（bigram）重疊比對，從網站既有的兩份審計意見資料
+  //   - AUDIT_OPINIONS_TRAFFIC：交通政策領域全類別（公共運輸/停車管理/道路安全
+  //     與路口工程/電動車與淨零運具/港埠與航空），110-114年度、22縣市。
+  //   - AUDIT_OPINIONS_TECH_ENFORCEMENT：「科技執法設備選址與易肇事路口改善」
+  //     專題彙整（52則，五大主題A-E），內容比前者更完整（含具體查核發現數字）。
+  // 中檢出與使用者問題最相關的幾則「原文片段」，暫時夾帶進系統提示詞，讓 AI
+  // 服務商（Gemini/OpenAI相容）真的能引用具體年度、縣市、數字回答，而不是只能
+  // 說「這個功能存在，請自己去查」。這一切都在瀏覽器端完成，不會多送出任何
+  // 使用者資料，只是把「原本就在這個網站裡的公開資料」多組合一份文字附上去。
+  // 只是「輕量檢索」而非真正的向量式 RAG：命中率抓大方向即可，不追求完美排序。
+  // ============================================================
+  let auditIndex = null; // 延遲建立，避免資料尚未載入時就出錯
+
+  function auditBigrams(str) {
+    const s = String(str || '').replace(/[\s，。、；：「」『』（）()%％,.\-—]/g, '');
+    const out = [];
+    for (let i = 0; i < s.length - 1; i++) out.push(s.substr(i, 2));
+    return out;
+  }
+
+  function auditYearVariants(y) {
+    const n = Number(y);
+    if (!n) return [];
+    return n > 1900 ? [n, n - 1911] : [n, n + 1911];
+  }
+
+  function buildAuditRecords() {
+    const records = [];
+    const traffic = (typeof window !== 'undefined' && window.AUDIT_OPINIONS_TRAFFIC) || [];
+    traffic.forEach(o => {
+      const seen = new Set();
+      (o.tags || []).forEach(tag => {
+        const sentences = (o.tagItems && o.tagItems[tag]) || [];
+        sentences.forEach(s => {
+          if (seen.has(s)) return;
+          seen.add(s);
+          records.push({
+            county: o.county, year: o.year, tag,
+            text: s,
+            display: `【${o.year}年度｜${o.county}｜審計意見統計－${tag}】${s}`,
+          });
+        });
+      });
+      if (seen.size === 0 && o.rep) {
+        records.push({
+          county: o.county, year: o.year, tag: (o.tags || [])[0] || '',
+          text: o.rep,
+          display: `【${o.year}年度｜${o.county}｜審計意見統計】${o.rep}`,
+        });
+      }
+    });
+    const tech = (typeof window !== 'undefined' && window.AUDIT_OPINIONS_TECH_ENFORCEMENT) || [];
+    tech.forEach(o => {
+      records.push({
+        county: o.entity, year: o.year, tag: o.themeName,
+        text: o.gist + ' ' + o.finding,
+        display: `【${o.year}年度｜${o.entity}${o.agency ? '（' + o.agency + '）' : ''}｜科技執法/易肇事路口專題－主題${o.theme}：${o.themeName}】意見要旨：${o.gist}／查核發現：${o.finding}`,
+      });
+    });
+    return records;
+  }
+
+  function buildAuditIndex() {
+    const records = buildAuditRecords();
+    const df = new Map();
+    const itemGrams = records.map(r => {
+      const grams = new Set(auditBigrams(r.text));
+      grams.forEach(g => df.set(g, (df.get(g) || 0) + 1));
+      return grams;
+    });
+    const N = records.length || 1;
+    const idf = new Map();
+    df.forEach((count, g) => idf.set(g, Math.log((N + 1) / (count + 1)) + 1));
+    return { records, itemGrams, idf };
+  }
+
+  const AUDIT_SEARCH_MIN_SCORE = 8;   // 至少要有一定的關鍵字重疊才值得夾帶，避免每次都附資料
+  const AUDIT_SEARCH_TOP_K = 5;
+  const AUDIT_SEARCH_MAX_CHARS = 2800; // 控制夾帶文字總長度，避免 payload 過大
+
+  function searchAuditOpinions(query) {
+    if (!auditIndex) auditIndex = buildAuditIndex();
+    if (!auditIndex.records.length) return [];
+    const qGrams = [...new Set(auditBigrams(query))];
+    if (!qGrams.length) return [];
+    const scored = auditIndex.records.map((r, i) => {
+      let score = 0;
+      const grams = auditIndex.itemGrams[i];
+      qGrams.forEach(g => { if (grams.has(g)) score += (auditIndex.idf.get(g) || 1); });
+      if (r.county && query.indexOf(r.county) !== -1) score += 3;
+      if (auditYearVariants(r.year).some(y => query.indexOf(String(y)) !== -1)) score += 2;
+      return { r, score };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    return scored.filter(s => s.score >= AUDIT_SEARCH_MIN_SCORE).slice(0, AUDIT_SEARCH_TOP_K);
+  }
+
+  function buildAuditRetrievalContext(query) {
+    let hits;
+    try {
+      hits = searchAuditOpinions(query);
+    } catch (e) { return ''; }
+    if (!hits.length) return '';
+    let used = 0;
+    const lines = [];
+    for (const h of hits) {
+      if (used + h.r.display.length > AUDIT_SEARCH_MAX_CHARS) break;
+      lines.push(h.r.display);
+      used += h.r.display.length;
+    }
+    if (!lines.length) return '';
+    return '【系統自動檢索到的相關審計意見原文片段，僅供本次回答參考】\n' +
+      lines.map((l, i) => `${i + 1}. ${l}`).join('\n') +
+      '\n（以上為審計部110-114年度總決算審核報告原文摘錄，非全部審計意見；請優先根據以上實際內容回答並清楚註明年度與縣市/機關，不要自行編造數字或年度；若與使用者問題無關請忽略，若判斷查無對應資料請誠實告知，並可建議使用者到 budget.html「審計意見統計」頁查閱完整原文。）';
+  }
 
   const PLATFORM_KNOWLEDGE = `你是「臺灣交通事故資料整合分析模組」網站內建的 AI 客服助理。這個網站是一個純靜態、以視覺化為主的交通事故資料分析平台，彙整民國110年至115年（西元2021–2026年）之公開資料。請用繁體中文、簡潔但具體地回答使用者的問題，優先協助使用者理解「怎麼用這個網站」「資料從哪裡來」「某個統計數字是怎麼算的」「有什麼已知的資料限制」。如果使用者問的內容超出你目前掌握的資訊範圍，請誠實說明你不確定，並建議使用者查看對應分頁的說明文字或 README，不要編造數字。
 
@@ -54,7 +176,7 @@ const AIAssistant = (() => {
 - 全國1000處易肇事路口清單、永續提升人行安全計畫799處補助地點（交通部核定196處＋內政部核定601處彙整，實際去重後為797處），皆已完成地理編碼。
 - 縣市重要統計指標（人口、人口密度、道路里程、事故傷害死亡率等，1998–2025）。
 - 交通安全相關政府採購標案：以「科技執法」「標誌標線」「人行道」「道路工程」「道路改善」「拓寬工程」六大類關鍵字查詢並人工複核，是「至少有這麼多」的下限金額，不代表政府實際總支出。
-- 審計意見統計：監察院調查與各級審計機關歷年決算審核報告中與交通安全相關之意見分類彙整。
+- 審計意見統計：監察院調查與各級審計機關歷年決算審核報告中與交通安全相關之意見分類彙整，另有「科技執法設備選址與易肇事路口改善」專題彙整52則（110-114年度、五大主題A-E，內容含具體查核發現數字，比審計意見統計頁的代表性摘要更完整）。
 
 【關鍵計算方法】
 - 環域（buffer）分析：以每個點位座標為圓心，計算指定半徑內於統計期間實際發生之A1/A2事故件數與死傷人數；建置時以空間網格索引預先算好50/100/200/300/500/1000公尺六種半徑的結果，網站查詢時只是查表，不是即時運算全部距離。
@@ -67,6 +189,7 @@ const AIAssistant = (() => {
 - 標案資料為關鍵字檢索結果，可能有漏未收錄之案件，屬於下限而非總支出。
 - 環域統計期間涵蓋設備設置前後，事故較少可能是嚇阻成效、也可能是選址不佳，無法僅憑統計數字判斷因果。
 - 審計意見與標案之交叉比對，僅「道路安全與路口工程」「科技執法與監理」兩個子標籤有對應之標案分類可供比對，其餘子標籤（公共運輸與客運鐵路、停車管理、電動車與淨零運具、港埠與航空）沒有可比對之標案類別純屬資料範圍限制。
+- 【審計意見檢索】系統會在你（AI）收到使用者訊息之前，自動用關鍵字比對從審計意見資料中挑出最相關的幾則原文片段，以「【系統自動檢索到的相關審計意見原文片段…】」開頭附加在這份系統提示詞下方——那一段才是本次對話「額外夾帶」的內容，並非我平常固定的知識。若那段檢索結果存在，請優先根據其中的實際文字回答，並清楚註明年度與縣市/機關，不要另外編造數字或年度；若本次對話沒有附加那一段（代表系統判斷檢索不到明顯相關的內容），且使用者問的是某一則具體審計意見的內容，請誠實說明目前查無足夠相關的檢索結果，建議使用者到 budget.html「審計意見統計」頁查閱完整原文，不要用你自己的推測或記憶去回答審計意見的具體內容。
 
 回答時請適度指出使用者可以到哪一個分頁查看更完整的資料或圖表，讓回答具備可操作性。若使用者的問題涉及對外發布的正式統計結論，請提醒其以頁面上實際數據與方法論說明為準，AI回答僅供理解輔助。`;
 
@@ -195,10 +318,11 @@ const AIAssistant = (() => {
 
   // ---------------- API calls ----------------
 
-  async function callGemini(cfg, messages) {
+  async function callGemini(cfg, messages, extraContext) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.geminiModel)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
+    const systemText = extraContext ? `${PLATFORM_KNOWLEDGE}\n\n${extraContext}` : PLATFORM_KNOWLEDGE;
     const body = {
-      systemInstruction: { role: 'system', parts: [{ text: PLATFORM_KNOWLEDGE }] },
+      systemInstruction: { role: 'system', parts: [{ text: systemText }] },
       contents: messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] })),
     };
     const resp = await fetch(url, {
@@ -227,13 +351,14 @@ const AIAssistant = (() => {
     return text;
   }
 
-  async function callOpenAICompatible(cfg, messages) {
+  async function callOpenAICompatible(cfg, messages, extraContext) {
     if (!cfg.openaiBaseUrl) throw new Error('請先填寫 API 網址');
     if (!cfg.openaiModel) throw new Error('請先填寫模型名稱');
     const url = `${cfg.openaiBaseUrl}/chat/completions`;
+    const systemText = extraContext ? `${PLATFORM_KNOWLEDGE}\n\n${extraContext}` : PLATFORM_KNOWLEDGE;
     const body = {
       model: cfg.openaiModel,
-      messages: [{ role: 'system', content: PLATFORM_KNOWLEDGE }]
+      messages: [{ role: 'system', content: systemText }]
         .concat(messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text }))),
     };
     const resp = await fetch(url, {
@@ -251,10 +376,10 @@ const AIAssistant = (() => {
     return text;
   }
 
-  async function callProvider(cfg, messages) {
+  async function callProvider(cfg, messages, extraContext) {
     if (!cfg.apiKey) throw new Error('請先在上方輸入 API 金鑰並儲存設定');
-    if (cfg.provider === 'gemini') return callGemini(cfg, messages);
-    return callOpenAICompatible(cfg, messages);
+    if (cfg.provider === 'gemini') return callGemini(cfg, messages, extraContext);
+    return callOpenAICompatible(cfg, messages, extraContext);
   }
 
   function friendlyNetworkError(err) {
@@ -282,7 +407,8 @@ const AIAssistant = (() => {
     const pendingEl = appendPending();
     try {
       const recent = history.slice(-MAX_HISTORY_TURNS * 2);
-      const reply = await callProvider(settings, recent);
+      const retrievalContext = buildAuditRetrievalContext(text);
+      const reply = await callProvider(settings, recent, retrievalContext);
       history.push({ role: 'assistant', text: reply });
       saveHistoryToStorage();
       renderChatLog();

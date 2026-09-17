@@ -229,6 +229,7 @@
               <option value="safety799">永續提升人行安全799處補助地點</option>
             </select>
             半徑：<input type="number" id="tcRankRadiusInput" value="300" min="10" max="5000" step="10" list="tcRadiusPresets" class="coord-input"> 公尺
+            <label class="hint" id="tcRankShowLowConfLabel"><input type="checkbox" id="tcRankShowLowConfChk"> 顯示僅有推估座標的縣市（標＊）</label>
             <button class="btn" id="tcRankGenBtn">📊 產生圖表</button>
             <button class="btn" data-export-chart="tcRankChart">⭳ PNG</button>
             <button class="btn" id="tcRankExportCsv">⭳ 匯出縣市統計 CSV</button>
@@ -236,7 +237,7 @@
         </div>
         <div class="chart-wrap xtall"><canvas id="tcRankChart"></canvas></div>
         <p class="hint" id="tcRankNote">輸入半徑後按「📊 產生圖表」。</p>
-        <p class="hint">對應報告「圖3-3 各縣市『1000易肇事路口』之科技執法設備覆蓋率」：計算「查詢對象」清單中每個縣市所轄路口，各自半徑內是否至少有 1 處科技執法設備（只算「有／沒有」，不論半徑內實際有幾處），再算出各縣市的涵蓋率（涵蓋路口數 ÷ 該縣市路口總數），由高到低排序；長條圖顏色分三段：<span style="color:var(--status-good)">綠色</span>＝涵蓋率達平均的1.5倍以上、<span style="color:#2a78d6">藍色</span>＝達平均以上（未滿1.5倍）、<span style="color:var(--status-critical)">紅色</span>＝低於平均；紅色虛線為各縣市涵蓋率之簡單平均（縣市數平均，非以路口數加權，且僅計入有路口資料的縣市）。<strong>本圖固定列出全臺 22 縣市</strong>：若某縣市在目前「查詢對象」清單中沒有任何路口（例如 1000易肇事路口清單中沒有金門縣、連江縣的路口），會以<span style="color:#9a988f">灰色</span>長條與「無路口資料」標示呈現，不計入平均值；縣市名稱後方標示「＊」者，代表該縣市科技執法設備座標目前全數為系統地理編碼推估座標（並非官方公告座標），涵蓋率數字僅供參考，實際涵蓋情形可能因座標精度而有落差。<strong>本圖採用平台目前資料庫（1,615處有座標之科技執法設備，含官方座標941處與後續地理編碼推估座標674處），比報告成文當時可用的資料更完整（報告成文後才補齊新北市、新竹縣、宜蘭縣、臺南市等縣市之座標），因此部分縣市數字會與報告原文有落差，屬預期現象，並非計算錯誤——這也是報告核心論點（科技執法設備選址與易肇事路口對應性不足）在納入更完整資料後依然成立的佐證。</strong>此圖為「涵蓋率」（路口有／無被涵蓋），與上方「易肇事路口科技執法涵蓋查詢」卡片的「半徑內共有幾處設備」是不同的統計量，兩者不可直接比較。</p>
+        <p class="hint">對應報告「圖3-3 各縣市『1000易肇事路口』之科技執法設備覆蓋率」：計算「查詢對象」清單中每個縣市所轄路口，各自半徑內是否至少有 1 處科技執法設備（只算「有／沒有」，不論半徑內實際有幾處），再算出各縣市的涵蓋率（涵蓋路口數 ÷ 該縣市路口總數），由高到低排序；長條圖顏色分三段：<span style="color:var(--status-good)">綠色</span>＝涵蓋率達平均的1.5倍以上、<span style="color:#2a78d6">藍色</span>＝達平均以上（未滿1.5倍）、<span style="color:var(--status-critical)">紅色</span>＝低於平均；紅色虛線為各縣市涵蓋率之簡單平均（縣市數平均，非以路口數加權，且僅計入有路口資料的縣市）。<strong>本圖固定列出全臺 22 縣市</strong>：若某縣市在目前「查詢對象」清單中沒有任何路口（例如 1000易肇事路口清單中沒有金門縣、連江縣的路口），會以<span style="color:#9a988f">灰色</span>長條與「無路口資料」標示呈現，不計入平均值；縣市名稱後方標示「＊」者，代表該縣市科技執法設備座標目前全數為系統地理編碼推估座標（並非官方公告座標），涵蓋率數字僅供參考，實際涵蓋情形可能因座標精度而有落差；為避免這些僅供參考的縣市與其他縣市直接並列比較造成誤解，圖表<strong>預設不顯示</strong>這些「＊」縣市（平均值也不含這些縣市），如需查看可勾選上方「顯示僅有推估座標的縣市（標＊）」，勾選後會重新把這些縣市加回圖表與平均值計算。<strong>本圖採用平台目前資料庫（1,615處有座標之科技執法設備，含官方座標941處與後續地理編碼推估座標674處），比報告成文當時可用的資料更完整（報告成文後才補齊新北市、新竹縣、宜蘭縣、臺南市等縣市之座標），因此部分縣市數字會與報告原文有落差，屬預期現象，並非計算錯誤——這也是報告核心論點（科技執法設備選址與易肇事路口對應性不足）在納入更完整資料後依然成立的佐證。</strong>此圖為「涵蓋率」（路口有／無被涵蓋），與上方「易肇事路口科技執法涵蓋查詢」卡片的「半徑內共有幾處設備」是不同的統計量，兩者不可直接比較。</p>
       </div>
 
       <div class="card">
@@ -735,7 +736,10 @@
         </div>
         <p class="hint">
           AI 客服已預先讀取本平台之分頁功能、資料來源與統計方法說明，可協助您了解「怎麼用地圖」「熱點環域分析怎麼算」
-          「資料涵蓋範圍與限制」等問題；惟其回答仍可能有誤，正式分析結論請以平台實際數據與頁面上的方法論說明為準。
+          「資料涵蓋範圍與限制」等問題；當您問到具體某年度／縣市／機關的審計意見內容時，系統會自動從審計部110-114年度
+          決算審核報告資料（含「審計意見統計」頁與「科技執法設備選址／易肇事路口改善」專題彙整52則）檢索最相關的原文片段
+          夾帶給AI參考回答。惟其回答仍可能有誤，正式分析結論請以平台實際數據與頁面上的方法論說明為準，審計意見完整原文
+          請以 budget.html「審計意見統計」頁為準。
         </p>
         <div class="chip-list" id="aiQuickChips"></div>
         <div id="aiChatLog" class="ai-chat-log"></div>
@@ -786,7 +790,8 @@
 <script src="data/a2_crosstab.data.js?v=20260921"></script>
 <script src="data/a2_geo.data.js?v=20260921"></script>
 <script src="data/tenders.data.js?v=20260921"></script>
-<script src="data/audit_opinions_traffic.data.js?v=20260921"></script>
+<script src="data/audit_opinions_traffic.data.js?v=20260923"></script>
+<script src="data/audit_opinions_tech_enforcement.data.js?v=20260921"></script>
 
 <!-- 應用程式邏輯 -->
 <script src="js/util.js?v=20260921"></script>
@@ -797,8 +802,8 @@
 <script src="js/improve.js?v=20260921"></script>
 <script src="js/tenders.js?v=20260921"></script>
 <script src="js/audit.js?v=20260921"></script>
-<script src="js/ai_assistant.js?v=20260921"></script>
+<script src="js/ai_assistant.js?v=20260922"></script>
 <script src="js/export.js?v=20260921"></script>
-<script src="js/app.js?v=20260921"></script>
+<script src="js/app.js?v=20260923"></script>
 </body>
 </html>
