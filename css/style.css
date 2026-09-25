@@ -635,3 +635,34 @@ table.data-table tbody tr:hover { background: var(--page-plane); }
 #aiChatInputRow { align-items: flex-end; }
 #aiQuickChips { margin-bottom: 4px; }
 #aiQuickChips .chip:hover { border-color: var(--series-1); color: var(--series-1); }
+
+/* ---------- 國際比較（OECD）分頁 ---------- */
+.oecd-chips { display: flex; flex-direction: column; gap: 6px; }
+.oecd-chip-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.oecd-chip-g { font-size: 11px; color: var(--text-muted); min-width: 84px; }
+.oecd-chips .chip { display: inline-flex; align-items: center; gap: 5px; }
+.oecd-chips .chip.oecd-on { background: var(--surface-2); color: var(--text-primary); border-color: var(--border-strong); font-weight: 600; }
+.oecd-chips .chip:disabled { opacity: .45; cursor: not-allowed; text-decoration: line-through; }
+.oecd-chips .chip:focus-visible, .oecd-pill:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+.oecd-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.oecd-msg { font-size: 12px; color: var(--text-primary); background: color-mix(in srgb, var(--status-warning) 22%, transparent); border-radius: var(--radius-sm); padding: 3px 8px; }
+.oecd-msg[hidden] { display: none; }
+.oecd-summary { font-size: 13px; margin: 0 0 10px; color: var(--text-secondary); }
+.oecd-summary b { color: var(--text-primary); }
+.oecd-table td.num, .oecd-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.oecd-table tr.oecd-tw td { background: color-mix(in srgb, var(--series-1) 12%, transparent); font-weight: 700; }
+.oecd-target-scroll { max-height: 380px; overflow: auto; }
+.oecd-target-scroll thead th, .oecd-table-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); }
+.oecd-table-scroll { max-height: 520px; overflow: auto; }
+.oecd-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px; white-space: nowrap; color: var(--text-primary); }
+.oecd-pill.good { background: color-mix(in srgb, var(--status-good) 18%, transparent); }
+.oecd-pill.warning { background: color-mix(in srgb, var(--status-warning) 26%, transparent); }
+.oecd-pill.critical { background: color-mix(in srgb, var(--status-critical) 20%, transparent); }
+.oecd-check { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.oecd-src, .oecd-notes { margin: 0 0 8px; padding-left: 1.2em; font-size: 12px; color: var(--text-secondary); line-height: 1.7; }
+.oecd-src a { color: var(--series-1); }
+#tab-oecd .card-tools { flex-wrap: wrap; row-gap: 4px; }
+@media (max-width: 640px) { .oecd-chip-g { min-width: 100%; } }
+.oecd-sub { display: block; font-size: 10.5px; color: var(--text-muted); font-weight: 400; }
+.oecd-cap { caption-side: bottom; text-align: left; font-size: 11px; color: var(--text-muted); padding-top: 6px; }
+.oecd-table th, .oecd-table td { white-space: nowrap; }

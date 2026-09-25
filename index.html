@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>臺灣交通事故資料整合分析模組</title>
-<link rel="stylesheet" href="css/style.css?v=20260921">
+<link rel="stylesheet" href="css/style.css?v=20260925">
 <!-- Leaflet 地圖 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
@@ -80,6 +80,7 @@
       <button class="tab-btn" data-tab="improve">改善趨勢分析</button>
       <button class="tab-btn" data-tab="audit">稽核工作站</button>
       <button class="tab-btn" data-tab="tenders">工程經費(標案)</button>
+      <button class="tab-btn" data-tab="oecd">🌐 國際比較(OECD)</button>
       <button class="tab-btn" data-tab="table">資料表與匯出</button>
       <button class="tab-btn" data-tab="ai">🤖 AI客服</button>
     </div>
@@ -652,6 +653,130 @@
       </div>
     </section>
 
+    <!-- ============ 國際比較（OECD） ============ -->
+    <section class="tab-panel" id="tab-oecd">
+      <div class="card oecd-intro">
+        <div class="card-head">
+          <h2>國際比較：OECD 國家道路交通事故（2019–2024）</h2>
+          <span class="desc">資料：OECD／國際運輸論壇（ITF）、OECD 人口統計；臺灣為主計總處統計，非 OECD 會員另行補入</span>
+        </div>
+        <div class="kpi-row" id="oecdKpis"></div>
+        <p class="hint">本分頁使用國際資料，<strong>不受左側篩選條件影響</strong>。死亡人數均為事故後 30 日內死亡（國際通用定義）。OECD 各國資料多數更新至 2024 年，部分國家僅至 2021–2023 年，排名與變化率以「各國最新可得年度」計算並於國名後標示年度；2020–2021 年受疫情影響交通量下降，比較時可切換 2019 年為基準。</p>
+      </div>
+
+      <div class="card oecd-controls">
+        <div class="nav-row">
+          <span class="nav-label">比較國家（套用於趨勢、減半路徑、嚴重度與明細表）：</span>
+          快速選取：<select id="oecdPreset" aria-label="國家群組"></select>
+          <span class="hint" id="oecdSelCount"></span>
+          <span class="oecd-msg" id="oecdMsg" role="status" hidden></span>
+        </div>
+        <div class="oecd-chips" id="oecdChips"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>① 五年趨勢比較</h2>
+          <div class="card-tools">
+            <select id="oecdTrendMetric" aria-label="指標"></select>
+            <select id="oecdTrendType" aria-label="圖表類型"></select>
+            <select id="oecdYearFrom" aria-label="起始年"></select>～<select id="oecdYearTo" aria-label="結束年"></select>
+            <button class="btn" data-export-chart="oecdTrendChart">⭳ PNG</button>
+            <button class="btn" data-oecd-csv="trend">⭳ CSV</button>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="oecdTrendChart"></canvas></div>
+        <p class="hint" id="oecdTrendNote"></p>
+        <p class="hint">臺灣以粗線標示，虛線為當年有資料之 OECD 會員國中位數。「指數化」以起始年為 100，可比較不同人口規模國家的相對變化。每個國家的顏色在勾選時固定，切換篩選不會改變。</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h2>② 每十萬人口死亡率排名</h2>
+            <div class="card-tools">
+              <select id="oecdRankMetric" aria-label="排名指標"></select>
+              <select id="oecdRankYear" aria-label="年度"></select>
+              <button class="btn" data-export-chart="oecdRankChart">⭳ PNG</button>
+              <button class="btn" data-oecd-csv="rank">⭳ CSV</button>
+            </div>
+          </div>
+          <div class="chart-wrap" id="oecdRankWrap"><canvas id="oecdRankChart"></canvas></div>
+          <p class="hint" id="oecdRankNote"></p>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>③ 死亡人數增減幅</h2>
+            <div class="card-tools">
+              基準年 <select id="oecdBaseYear" aria-label="基準年"></select>
+              比較至 <select id="oecdEndYear" aria-label="比較年"></select>
+              <button class="btn" data-export-chart="oecdChangeChart">⭳ PNG</button>
+              <button class="btn" data-oecd-csv="change">⭳ CSV</button>
+            </div>
+          </div>
+          <div class="chart-wrap" id="oecdChangeWrap"><canvas id="oecdChangeChart"></canvas></div>
+          <p class="hint">臺灣以粗框標示。增減幅以死亡人數計算（與聯合國及我國道安目標口徑一致），不受人口增減影響之比較請參考左側死亡率排名。</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>③-2 聯合國「2030 年道路死亡減半」目標進度</h2>
+          <div class="card-tools">
+            <button class="btn" data-export-chart="oecdPathChart">⭳ PNG</button>
+            <button class="btn" data-oecd-csv="change">⭳ CSV</button>
+          </div>
+        </div>
+        <p class="oecd-summary" id="oecdTargetSummary"></p>
+        <div class="grid-2">
+          <div class="chart-wrap tall"><canvas id="oecdPathChart"></canvas></div>
+          <div class="table-scroll oecd-target-scroll"><table class="data-table oecd-table" id="oecdTargetTable"></table></div>
+        </div>
+        <p class="hint">聯合國大會第 74/299 號決議宣布 2021–2030 年為「第二個道路安全行動十年」，目標為 2030 年前道路交通死亡人數減半。本表以所選基準年至 2030 年等比例減半，計算每年所需平均減少幅度，並與各國實際年均變化比較：<strong>✔ 達標步調</strong>＝年均減幅達到要求；<strong>▲ 下降但落後</strong>＝有下降但幅度不足；<strong>✖ 未下降</strong>＝持平或增加。我國交通部年度道安目標為每年死亡人數下降 5%～7%，可與此對照。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>④ 事故嚴重度比較</h2>
+          <div class="card-tools">
+            <select id="oecdSevMetric" aria-label="嚴重度指標"></select>
+            <select id="oecdSevYear" aria-label="年度"></select>
+            <label class="hint oecd-check"><input type="checkbox" id="oecdSevExclude"> 排除口徑不一致國家</label>
+            <button class="btn" data-export-chart="oecdSevChart">⭳ PNG</button>
+            <button class="btn" data-oecd-csv="sev">⭳ CSV</button>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="oecdSevChart"></canvas></div>
+        <p class="hint" id="oecdSevNote"></p>
+        <p class="hint"><strong>如何閱讀：</strong>右側＝人口死亡風險高；上方＝每件事故較容易致死。臺灣位於「死亡率高、每件事故致死率低」的位置，代表輕傷事故通報數量很多（每十萬人口傷亡事故件數遠高於多數國家），並非事故較不嚴重，解讀時需特別留意。<strong>各國「受傷」與「傷亡事故」的通報門檻差異很大</strong>（例如部分國家只計入住院者、部分國家事故件數含財損事故），嚴重度指標僅供參考；受傷人數少於事故件數的國家（荷蘭、美國、墨西哥等）預設排除。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>⑤ 明細資料表與匯出</h2>
+          <div class="card-tools">
+            <select id="oecdTableScope" aria-label="資料範圍"></select>
+            <span class="hint" id="oecdTableCount"></span>
+            <button class="btn" data-oecd-csv="table">⭳ CSV</button>
+            <button class="btn primary" id="oecdXlsxBtn">⭳ Excel（全部國家）</button>
+          </div>
+        </div>
+        <div class="table-scroll oecd-table-scroll"><table class="data-table oecd-table" id="oecdTable"></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>資料來源與比較限制</h2></div>
+        <ul class="oecd-src" id="oecdSrcList"></ul>
+        <ul class="oecd-notes">
+          <li>OECD 38 個會員國中，哥倫比亞、哥斯大黎加未在此資料集中提供道路事故數據；丹麥、盧森堡僅至 2021 年，冰島至 2022 年，以色列、美國、加拿大、智利、墨西哥、奧地利、西班牙、葡萄牙、波蘭等國至 2023 年。部分最新年度為各國提報之暫定值。</li>
+          <li>臺灣非 OECD 會員，數據取自行政院主計總處「縣市重要統計指標」之道路交通事故（30 日內）死亡與受傷人數、肇事總件數（A1＋A2 類事故），人口為年底男性加女性人口；定義與 OECD 相同採 30 日內死亡，但受傷與事故件數的通報範圍（含輕傷）較多數國家寬。</li>
+          <li>墨西哥死亡人數明顯低於其他國際估計，統計涵蓋範圍可能不完整，排名中以「※」標示；美國受傷與事故件數為估計值，且事故件數含財損事故。</li>
+          <li>OECD 中位數以當年有資料的會員國計算，不含臺灣；不同年度參與計算的國家數可能不同。</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============ 資料表與匯出 ============ -->
     <section class="tab-panel" id="tab-table">
       <div class="card">
@@ -792,6 +917,7 @@
 <script src="data/tenders.data.js?v=20260921"></script>
 <script src="data/audit_opinions_traffic.data.js?v=20260923"></script>
 <script src="data/audit_opinions_tech_enforcement.data.js?v=20260921"></script>
+<script src="data/oecd_road_safety.data.js?v=20260925"></script>
 
 <!-- 應用程式邏輯 -->
 <script src="js/util.js?v=20260921"></script>
@@ -802,8 +928,9 @@
 <script src="js/improve.js?v=20260921"></script>
 <script src="js/tenders.js?v=20260921"></script>
 <script src="js/audit.js?v=20260921"></script>
-<script src="js/ai_assistant.js?v=20260922"></script>
+<script src="js/ai_assistant.js?v=20260925"></script>
+<script src="js/oecd.js?v=20260925"></script>
 <script src="js/export.js?v=20260921"></script>
-<script src="js/app.js?v=20260923"></script>
+<script src="js/app.js?v=20260925"></script>
 </body>
 </html>

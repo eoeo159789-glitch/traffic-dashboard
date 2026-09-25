@@ -260,6 +260,7 @@
       case 'improve': Improve.render(); break;
       case 'audit': Audit.render(); break;
       case 'tenders': Tenders.render(); break;
+      case 'oecd': Oecd.render(); break;
       case 'table': renderTableTab(accidents); break;
       case 'ai': AIAssistant.render(); break;
     }
